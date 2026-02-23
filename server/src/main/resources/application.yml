@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/harugiwun
+    username: your_db_user
+    password: your_db_password
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false
+
+security:
+  jwt:
+    secret: please-change-this-secret-key-to-at-least-32-characters
+    expiration-seconds: 86400
