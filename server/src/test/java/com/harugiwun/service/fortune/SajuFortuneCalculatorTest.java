@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class SajuFortuneCalculatorTest {
 
-    private final SajuFortuneCalculator calculator = new SajuFortuneCalculator();
+    private final SajuFortuneCalculator calculator = new SajuFortuneCalculator(new FortuneScoringWeights());
 
     @Test
     void deterministicForSameInputs() {

@@ -34,6 +34,16 @@ public class SajuFortuneCalculator {
         WOOD, FIRE, EARTH, METAL, WATER
     }
 
+    private enum DayMasterStrength {
+        WEAK, BALANCED, STRONG
+    }
+
+    private final FortuneScoringWeights weights;
+
+    public SajuFortuneCalculator(FortuneScoringWeights weights) {
+        this.weights = weights;
+    }
+
     private static final Map<Element, List<String>> ELEMENT_COLORS = Map.of(
         Element.WOOD, List.of("Green", "Teal"),
         Element.FIRE, List.of("Red", "Orange"),
@@ -89,31 +99,64 @@ public class SajuFortuneCalculator {
         Element output = GENERATES.get(dayMaster);
         Element peer = dayMaster;
 
-        int money = clamp(scoreBase(natalCounts)
-            + daily.count(wealth) * 9
-            + daily.count(resource) * 2
-            - daily.count(officer) * 6);
+        DayMasterStrength strength = evaluateDayMasterStrength(natal, dayMaster, natalCounts);
+        int strengthBias = strengthBias(strength);
+
+        int baseScore = scoreBase(natalCounts) + strengthBias;
+
+        FortuneScoringWeights.CategoryWeights moneyWeights = weights.getCategoryWeights(FortuneCategory.MONEY);
+        int moneyBase = 
+            baseScore
+                + daily.count(wealth) * moneyWeights.wealthWeight()
+                + daily.count(resource) * moneyWeights.resourceWeight()
+                + daily.count(officer) * moneyWeights.officerWeight()
+                + daily.count(output) * moneyWeights.outputWeight()
+                + daily.count(peer) * moneyWeights.peerWeight();
+        int money = clamp(
+            applyBranchRelationAdjustments(moneyBase, FortuneCategory.MONEY, wealth, natal, today)
+        );
 
         Element spouseStar = spouseStar(gender, wealth, officer);
-        int love = clamp(scoreBase(natalCounts)
-            + daily.count(spouseStar) * 10
-            + daily.count(resource) * 2
-            - daily.count(output) * 2);
+        FortuneScoringWeights.CategoryWeights loveWeights = weights.getCategoryWeights(FortuneCategory.LOVE);
+        int loveBase =
+            baseScore
+                + daily.count(spouseStar) * Math.max(loveWeights.wealthWeight(), loveWeights.officerWeight())
+                + daily.count(resource) * loveWeights.resourceWeight()
+                + daily.count(output) * loveWeights.outputWeight();
+        int love = clamp(
+            applyBranchRelationAdjustments(loveBase, FortuneCategory.LOVE, elementOfBranch(branchOf(today.getDay())), natal, today)
+        );
 
-        int work = clamp(scoreBase(natalCounts)
-            + daily.count(officer) * 9
-            + daily.count(resource) * 3
-            - daily.count(wealth) * 2);
+        FortuneScoringWeights.CategoryWeights workWeights = weights.getCategoryWeights(FortuneCategory.WORK);
+        int workBase =
+            baseScore
+                + daily.count(wealth) * workWeights.wealthWeight()
+                + daily.count(resource) * workWeights.resourceWeight()
+                + daily.count(officer) * workWeights.officerWeight();
+        int work = clamp(
+            applyBranchRelationAdjustments(workBase, FortuneCategory.WORK, officer, natal, today)
+        );
 
-        int social = clamp(scoreBase(natalCounts)
-            + daily.count(peer) * 6
-            + daily.count(output) * 4
-            - daily.count(officer) * 2);
+        FortuneScoringWeights.CategoryWeights socialWeights = weights.getCategoryWeights(FortuneCategory.SOCIAL);
+        int socialBase =
+            baseScore
+                + daily.count(wealth) * socialWeights.wealthWeight()
+                + daily.count(resource) * socialWeights.resourceWeight()
+                + daily.count(officer) * socialWeights.officerWeight()
+                + daily.count(output) * socialWeights.outputWeight()
+                + daily.count(peer) * socialWeights.peerWeight();
+        int social = clamp(
+            applyBranchRelationAdjustments(socialBase, FortuneCategory.SOCIAL, peer, natal, today)
+        );
 
-        int health = clamp(scoreBase(natalCounts)
-            + balanceBonus(natalCounts)
-            + daily.count(mostNeeded(natalCounts)) * 8
-            - daily.count(mostExcess(natalCounts)) * 4);
+        int healthBase =
+            baseScore
+                + balanceBonus(natalCounts)
+                + daily.count(mostNeeded(natalCounts)) * 8
+                - daily.count(mostExcess(natalCounts)) * 4;
+        int health = clamp(
+            applyBranchRelationAdjustments(healthBase, FortuneCategory.HEALTH, dayMaster, natal, today)
+        );
 
         int total = clamp((money + love + work + social + health) / 5);
 
@@ -179,7 +222,7 @@ public class SajuFortuneCalculator {
 
     private int scoreBase(EnumMap<Element, Integer> natalCounts) {
         int bonus = balanceBonus(natalCounts);
-        return 55 + bonus;
+        return weights.baseScore() + bonus;
     }
 
     private int balanceBonus(EnumMap<Element, Integer> natalCounts) {
@@ -208,6 +251,112 @@ public class SajuFortuneCalculator {
             }
         }
         return best;
+    }
+
+    private DayMasterStrength evaluateDayMasterStrength(EightChar natal, Element dayMaster, EnumMap<Element, Integer> natalCounts) {
+        // 월지 오행
+        Element monthBranchElement = elementOfBranch(branchOf(natal.getMonth()));
+
+        int score = 0;
+        // 월령 가중치: 같은 오행이거나 생조 관계면 가산, 극을 당하면 감점
+        score += monthBranchWeight(dayMaster, monthBranchElement);
+
+        Element resource = generatedBy(dayMaster);
+        Element peer = dayMaster;
+        Element wealth = CONTROLS.get(dayMaster);
+        Element officer = controlledBy(dayMaster);
+
+        int peerCount = natalCounts.getOrDefault(peer, 0);
+        int resourceCount = natalCounts.getOrDefault(resource, 0);
+        int wealthCount = natalCounts.getOrDefault(wealth, 0);
+        int officerCount = natalCounts.getOrDefault(officer, 0);
+
+        // 비겁/인성(동류/생조)이 많으면 신강 쪽으로
+        score += peerCount * 2;
+        score += resourceCount;
+        // 재·관이 많으면 신약 쪽으로
+        score -= wealthCount;
+        score -= officerCount * 2;
+
+        if (score >= 6) {
+            return DayMasterStrength.STRONG;
+        }
+        if (score <= 1) {
+            return DayMasterStrength.WEAK;
+        }
+        return DayMasterStrength.BALANCED;
+    }
+
+    private int monthBranchWeight(Element dayMaster, Element monthBranchElement) {
+        if (monthBranchElement == dayMaster) {
+            return 4;
+        }
+        // 월지가 일간을 생조하면 +3
+        if (GENERATES.get(monthBranchElement) == dayMaster) {
+            return 3;
+        }
+        // 일간이 월지를 생하면 +1
+        if (GENERATES.get(dayMaster) == monthBranchElement) {
+            return 1;
+        }
+        // 월지가 일간을 극하면 -3
+        if (CONTROLS.get(monthBranchElement) == dayMaster) {
+            return -3;
+        }
+        // 일간이 월지를 극하면 -1
+        if (CONTROLS.get(dayMaster) == monthBranchElement) {
+            return -1;
+        }
+        return 0;
+    }
+
+    private int strengthBias(DayMasterStrength strength) {
+        return switch (strength) {
+            case STRONG -> 3;
+            case WEAK -> -3;
+            case BALANCED -> 0;
+        };
+    }
+
+    private int applyBranchRelationAdjustments(
+        int score,
+        FortuneCategory category,
+        Element relatedElement,
+        EightChar natal,
+        EightChar today
+    ) {
+        String natalYearBranch = branchOf(natal.getYear());
+        String natalMonthBranch = branchOf(natal.getMonth());
+        String natalDayBranch = branchOf(natal.getDay());
+        String natalTimeBranch = branchOf(natal.getTime());
+        String todayDayBranch = branchOf(today.getDay());
+
+        // 관련된 오행을 가진 원국 지지가 오늘 일지와 충이면 패널티
+        String[] natalBranches = {natalYearBranch, natalMonthBranch, natalDayBranch, natalTimeBranch};
+        for (String b : natalBranches) {
+            if (b == null) continue;
+            if (elementOfBranch(b) == relatedElement && BranchRelationUtils.isClash(b, todayDayBranch)) {
+                score -= weights.clashPenalty();
+            }
+        }
+
+        // 오늘 일지를 포함한 전체 지지에서 삼합이 형성되고,
+        // 그 삼합국의 중심이 되는 오늘 일지의 오행이 관련 오행과 같으면 보너스
+        List<String> allBranches = List.of(
+            natalYearBranch,
+            natalMonthBranch,
+            natalDayBranch,
+            natalTimeBranch,
+            todayDayBranch
+        );
+        if (BranchRelationUtils.isThreeHarmony(allBranches)) {
+            Element todayElement = elementOfBranch(todayDayBranch);
+            if (todayElement == relatedElement) {
+                score += weights.harmonyBonus();
+            }
+        }
+
+        return score;
     }
 
     private Element mostExcess(EnumMap<Element, Integer> natalCounts) {

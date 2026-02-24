@@ -39,4 +39,43 @@ public class TemplateTextGenerator {
         }
         return "주의";
     }
+
+    public String narrativeText(
+        String dominantElement,
+        String dayMasterStrength,
+        boolean strongWealth,
+        boolean strongOfficer,
+        boolean hasWealthClashToday
+    ) {
+        StringBuilder sb = new StringBuilder();
+
+        if (dominantElement != null) {
+            sb.append("오늘은 ").append(dominantElement).append(" 기운이 두드러지는 날이에요. ");
+        }
+
+        if ("STRONG".equals(dayMasterStrength)) {
+            sb.append("전체적으로 자신감과 추진력이 강한 흐름입니다. ");
+        } else if ("WEAK".equals(dayMasterStrength)) {
+            sb.append("체력과 마음이 쉽게 지칠 수 있어 무리하지 않는 편이 좋아요. ");
+        }
+
+        if (strongWealth) {
+            sb.append("재성의 기운이 강하게 작용해 금전적인 기회가 눈에 띌 수 있어요. ");
+        }
+
+        if (strongOfficer) {
+            sb.append("관성의 기운이 살아 있어 책임과 평가가 부각되는 하루입니다. ");
+        }
+
+        if (hasWealthClashToday) {
+            sb.append("다만 재성에 충이 들어와 투자나 큰 지출은 한 번 더 점검하는 것이 좋아요. ");
+        }
+
+        if (sb.length() == 0) {
+            sb.append("오늘은 전반적으로 큰 굴곡 없이 흘러가는 에너지입니다. ");
+        }
+
+        sb.append("자신의 페이스를 유지하면서 기회를 포착해 보세요.");
+        return sb.toString();
+    }
 }
