@@ -1,8 +1,10 @@
-﻿package com.harugiwun.domain.profile;
+package com.harugiwun.domain.profile;
 
 import com.harugiwun.domain.user.AppUser;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -34,6 +36,17 @@ public class AppUserProfile {
     @Column
     private LocalTime birthTime;
 
+    @Enumerated(EnumType.STRING)
+    @Column
+    private BirthCalendarType birthCalendarType;
+
+    @Column
+    private Boolean birthIsLeapMonth;
+
+    @Enumerated(EnumType.STRING)
+    @Column
+    private Gender gender;
+
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
@@ -41,6 +54,15 @@ public class AppUserProfile {
     @PreUpdate
     public void touch() {
         this.updatedAt = LocalDateTime.now();
+        if (this.birthCalendarType == null) {
+            this.birthCalendarType = BirthCalendarType.SOLAR;
+        }
+        if (this.birthIsLeapMonth == null) {
+            this.birthIsLeapMonth = Boolean.FALSE;
+        }
+        if (this.gender == null) {
+            this.gender = Gender.UNKNOWN;
+        }
     }
 
     public Long getId() { return id; }
@@ -50,5 +72,11 @@ public class AppUserProfile {
     public void setBirthDate(LocalDate birthDate) { this.birthDate = birthDate; }
     public LocalTime getBirthTime() { return birthTime; }
     public void setBirthTime(LocalTime birthTime) { this.birthTime = birthTime; }
+    public BirthCalendarType getBirthCalendarType() { return birthCalendarType; }
+    public void setBirthCalendarType(BirthCalendarType birthCalendarType) { this.birthCalendarType = birthCalendarType; }
+    public Boolean getBirthIsLeapMonth() { return birthIsLeapMonth; }
+    public void setBirthIsLeapMonth(Boolean birthIsLeapMonth) { this.birthIsLeapMonth = birthIsLeapMonth; }
+    public Gender getGender() { return gender; }
+    public void setGender(Gender gender) { this.gender = gender; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
 }

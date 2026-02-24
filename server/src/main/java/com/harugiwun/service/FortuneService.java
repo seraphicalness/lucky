@@ -1,4 +1,4 @@
-﻿package com.harugiwun.service;
+package com.harugiwun.service;
 
 import com.harugiwun.common.TemplateTextGenerator;
 import com.harugiwun.domain.fortune.FortuneDaily;
@@ -8,9 +8,8 @@ import com.harugiwun.dto.FortuneDtos;
 import com.harugiwun.repository.AppUserProfileRepository;
 import com.harugiwun.repository.AppUserRepository;
 import com.harugiwun.repository.FortuneDailyRepository;
+import com.harugiwun.service.fortune.SajuFortuneCalculator;
 import java.time.LocalDate;
-import java.util.List;
-import java.util.Random;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,23 +18,24 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class FortuneService {
 
-    private static final List<String> COLORS = List.of("Red", "Blue", "Green", "Yellow", "Purple", "Orange", "White", "Black");
-
     private final FortuneDailyRepository fortuneDailyRepository;
     private final AppUserRepository appUserRepository;
     private final AppUserProfileRepository appUserProfileRepository;
     private final TemplateTextGenerator templateTextGenerator;
+    private final SajuFortuneCalculator sajuFortuneCalculator;
 
     public FortuneService(
         FortuneDailyRepository fortuneDailyRepository,
         AppUserRepository appUserRepository,
         AppUserProfileRepository appUserProfileRepository,
-        TemplateTextGenerator templateTextGenerator
+        TemplateTextGenerator templateTextGenerator,
+        SajuFortuneCalculator sajuFortuneCalculator
     ) {
         this.fortuneDailyRepository = fortuneDailyRepository;
         this.appUserRepository = appUserRepository;
         this.appUserProfileRepository = appUserProfileRepository;
         this.templateTextGenerator = templateTextGenerator;
+        this.sajuFortuneCalculator = sajuFortuneCalculator;
     }
 
     @Transactional
@@ -79,21 +79,20 @@ public class FortuneService {
             .findById(userId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
-        LocalDate birthDate = appUserProfileRepository.findByUserId(userId)
-            .map(AppUserProfile::getBirthDate)
-            .orElse(LocalDate.of(2000, 1, 1));
+        AppUserProfile profile = appUserProfileRepository.findByUserId(userId).orElse(null);
+        if (profile == null || profile.getBirthDate() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Profile birthDate is required");
+        }
 
-        long seed = birthDate.toEpochDay() * 37L + date.toEpochDay() * 17L + userId;
-        Random random = new Random(seed);
-
-        int money = score(random);
-        int love = score(random);
-        int health = score(random);
-        int work = score(random);
-        int social = score(random);
-        int total = clamp((money + love + health + work + social) / 5 + random.nextInt(11) - 5);
-        String luckyColor = COLORS.get(random.nextInt(COLORS.size()));
-        int luckyNumber = random.nextInt(45) + 1;
+        SajuFortuneCalculator.Result r = sajuFortuneCalculator.calculate(userId, profile, date);
+        int money = r.moneyScore();
+        int love = r.loveScore();
+        int health = r.healthScore();
+        int work = r.workScore();
+        int social = r.socialScore();
+        int total = r.totalScore();
+        String luckyColor = r.luckyColor();
+        int luckyNumber = r.luckyNumber();
 
         FortuneDaily fortune = new FortuneDaily();
         fortune.setUser(user);
@@ -110,13 +109,5 @@ public class FortuneService {
         fortune.setDetailText(templateTextGenerator.detailText(money, love, health, work, social));
 
         return fortuneDailyRepository.save(fortune);
-    }
-
-    private int score(Random random) {
-        return 35 + random.nextInt(66);
-    }
-
-    private int clamp(int score) {
-        return Math.max(0, Math.min(100, score));
     }
 }

@@ -1,4 +1,4 @@
-﻿package com.harugiwun.repository;
+package com.harugiwun.repository;
 
 import com.harugiwun.domain.fortune.FortuneDaily;
 import java.time.LocalDate;

@@ -1,4 +1,4 @@
-﻿package com.harugiwun.domain.user;
+package com.harugiwun.domain.user;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

@@ -1,4 +1,4 @@
-﻿package com.harugiwun.repository;
+package com.harugiwun.repository;
 
 import com.harugiwun.domain.user.AppUserAuth;
 import com.harugiwun.domain.user.AuthProvider;

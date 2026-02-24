@@ -1,6 +1,8 @@
-﻿package com.harugiwun.service;
+package com.harugiwun.service;
 
 import com.harugiwun.domain.profile.AppUserProfile;
+import com.harugiwun.domain.profile.BirthCalendarType;
+import com.harugiwun.domain.profile.Gender;
 import com.harugiwun.domain.user.AppUser;
 import com.harugiwun.dto.ProfileDtos;
 import com.harugiwun.repository.AppUserProfileRepository;
@@ -29,7 +31,10 @@ public class ProfileService {
             user.getId(),
             user.getNickname(),
             profile == null ? null : profile.getBirthDate(),
-            profile == null ? null : profile.getBirthTime()
+            profile == null ? null : profile.getBirthTime(),
+            profile == null ? null : profile.getBirthCalendarType(),
+            profile == null ? null : profile.getBirthIsLeapMonth(),
+            profile == null ? null : profile.getGender()
         );
     }
 
@@ -52,13 +57,31 @@ public class ProfileService {
 
         profile.setBirthDate(request.birthDate());
         profile.setBirthTime(request.birthTime());
+        if (request.birthCalendarType() != null) {
+            profile.setBirthCalendarType(request.birthCalendarType());
+        } else if (profile.getBirthCalendarType() == null) {
+            profile.setBirthCalendarType(BirthCalendarType.SOLAR);
+        }
+        if (request.birthIsLeapMonth() != null) {
+            profile.setBirthIsLeapMonth(request.birthIsLeapMonth());
+        } else if (profile.getBirthIsLeapMonth() == null) {
+            profile.setBirthIsLeapMonth(Boolean.FALSE);
+        }
+        if (request.gender() != null) {
+            profile.setGender(request.gender());
+        } else if (profile.getGender() == null) {
+            profile.setGender(Gender.UNKNOWN);
+        }
         appUserProfileRepository.save(profile);
 
         return new ProfileDtos.ProfileResponse(
             user.getId(),
             user.getNickname(),
             profile.getBirthDate(),
-            profile.getBirthTime()
+            profile.getBirthTime(),
+            profile.getBirthCalendarType(),
+            profile.getBirthIsLeapMonth(),
+            profile.getGender()
         );
     }
 

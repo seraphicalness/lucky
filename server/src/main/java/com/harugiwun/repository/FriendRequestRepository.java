@@ -1,4 +1,4 @@
-﻿package com.harugiwun.repository;
+package com.harugiwun.repository;
 
 import com.harugiwun.domain.friend.FriendRequest;
 import org.springframework.data.jpa.repository.JpaRepository;

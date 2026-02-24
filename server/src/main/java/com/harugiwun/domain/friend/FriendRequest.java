@@ -1,4 +1,4 @@
-﻿package com.harugiwun.domain.friend;
+package com.harugiwun.domain.friend;
 
 import com.harugiwun.domain.user.AppUser;
 import jakarta.persistence.Column;

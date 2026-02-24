@@ -1,5 +1,7 @@
-﻿package com.harugiwun.dto;
+package com.harugiwun.dto;
 
+import com.harugiwun.domain.profile.BirthCalendarType;
+import com.harugiwun.domain.profile.Gender;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
@@ -9,7 +11,10 @@ public class AuthDtos {
         String providerUserId,
         String nickname,
         LocalDate birthDate,
-        LocalTime birthTime
+        LocalTime birthTime,
+        BirthCalendarType birthCalendarType,
+        Boolean birthIsLeapMonth,
+        Gender gender
     ) {}
 
     public record SocialLoginResponse(

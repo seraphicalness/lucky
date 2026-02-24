@@ -1,4 +1,4 @@
-﻿package com.harugiwun.domain.friend;
+package com.harugiwun.domain.friend;
 
 public enum FriendRequestStatus {
     PENDING,

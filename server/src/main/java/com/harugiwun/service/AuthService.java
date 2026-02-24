@@ -1,7 +1,9 @@
-﻿package com.harugiwun.service;
+package com.harugiwun.service;
 
 import com.harugiwun.config.JwtUtil;
 import com.harugiwun.domain.profile.AppUserProfile;
+import com.harugiwun.domain.profile.BirthCalendarType;
+import com.harugiwun.domain.profile.Gender;
 import com.harugiwun.domain.user.AppUser;
 import com.harugiwun.domain.user.AppUserAuth;
 import com.harugiwun.domain.user.AuthProvider;
@@ -51,6 +53,21 @@ public class AuthService {
             });
             profile.setBirthDate(request.birthDate());
             profile.setBirthTime(request.birthTime());
+            if (request.birthCalendarType() != null) {
+                profile.setBirthCalendarType(request.birthCalendarType());
+            } else if (profile.getBirthCalendarType() == null) {
+                profile.setBirthCalendarType(BirthCalendarType.SOLAR);
+            }
+            if (request.birthIsLeapMonth() != null) {
+                profile.setBirthIsLeapMonth(request.birthIsLeapMonth());
+            } else if (profile.getBirthIsLeapMonth() == null) {
+                profile.setBirthIsLeapMonth(Boolean.FALSE);
+            }
+            if (request.gender() != null) {
+                profile.setGender(request.gender());
+            } else if (profile.getGender() == null) {
+                profile.setGender(Gender.UNKNOWN);
+            }
             appUserProfileRepository.save(profile);
         }
 

@@ -1,0 +1,27 @@
+# macOS / Xcode
+.DS_Store
+*.xcworkspace/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+DerivedData/
+build/
+
+# Swift Package
+.swiftpm/
+.build/
+
+# IntelliJ / VSCode
+.idea/
+.vscode/
+
+# Java / Gradle
+server/.gradle/
+server/build/
+**/out/
+
+# Logs / env
+*.log
+.env
+.env.*
+
+# 로컬 설정 
+server/src/main/resources/application-local.yml
