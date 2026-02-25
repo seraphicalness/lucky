@@ -105,8 +105,10 @@ public class FortuneService {
         fortune.setTotalScore(total);
         fortune.setLuckyColor(luckyColor);
         fortune.setLuckyNumber(luckyNumber);
-        fortune.setWidgetSummary(templateTextGenerator.widgetSummary(total));
-        fortune.setDetailText(templateTextGenerator.detailText(money, love, health, work, social));
+        fortune.setWidgetSummary(templateTextGenerator.widgetSummary(total, userId, date));
+        fortune.setDetailText(templateTextGenerator.detailText(
+            r.dominantTodayElement(), r.highestCategory(), r.lowestCategory(), r.hasClash()
+        ));
 
         return fortuneDailyRepository.save(fortune);
     }

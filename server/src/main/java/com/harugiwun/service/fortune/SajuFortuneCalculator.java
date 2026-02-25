@@ -14,6 +14,7 @@ import java.time.LocalTime;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -27,12 +28,12 @@ public class SajuFortuneCalculator {
         int workScore,
         int socialScore,
         String luckyColor,
-        int luckyNumber
+        int luckyNumber,
+        Element dominantTodayElement,
+        FortuneCategory highestCategory,
+        FortuneCategory lowestCategory,
+        boolean hasClash
     ) {}
-
-    private enum Element {
-        WOOD, FIRE, EARTH, METAL, WATER
-    }
 
     private enum DayMasterStrength {
         WEAK, BALANCED, STRONG
@@ -102,20 +103,24 @@ public class SajuFortuneCalculator {
         DayMasterStrength strength = evaluateDayMasterStrength(natal, dayMaster, natalCounts);
         int strengthBias = strengthBias(strength);
 
+        boolean hasClash = false;
+
         int baseScore = scoreBase(natalCounts) + strengthBias;
 
+        // Money Score
         FortuneScoringWeights.CategoryWeights moneyWeights = weights.getCategoryWeights(FortuneCategory.MONEY);
-        int moneyBase = 
+        int moneyBase =
             baseScore
                 + daily.count(wealth) * moneyWeights.wealthWeight()
                 + daily.count(resource) * moneyWeights.resourceWeight()
                 + daily.count(officer) * moneyWeights.officerWeight()
                 + daily.count(output) * moneyWeights.outputWeight()
                 + daily.count(peer) * moneyWeights.peerWeight();
-        int money = clamp(
-            applyBranchRelationAdjustments(moneyBase, FortuneCategory.MONEY, wealth, natal, today)
-        );
+        var moneyAdj = applyBranchRelationAdjustments(moneyBase, FortuneCategory.MONEY, wealth, natal, today);
+        int money = clamp(moneyAdj.score());
+        if (moneyAdj.clashDetected()) hasClash = true;
 
+        // Love Score
         Element spouseStar = spouseStar(gender, wealth, officer);
         FortuneScoringWeights.CategoryWeights loveWeights = weights.getCategoryWeights(FortuneCategory.LOVE);
         int loveBase =
@@ -123,20 +128,22 @@ public class SajuFortuneCalculator {
                 + daily.count(spouseStar) * Math.max(loveWeights.wealthWeight(), loveWeights.officerWeight())
                 + daily.count(resource) * loveWeights.resourceWeight()
                 + daily.count(output) * loveWeights.outputWeight();
-        int love = clamp(
-            applyBranchRelationAdjustments(loveBase, FortuneCategory.LOVE, elementOfBranch(branchOf(today.getDay())), natal, today)
-        );
+        var loveAdj = applyBranchRelationAdjustments(loveBase, FortuneCategory.LOVE, elementOfBranch(branchOf(today.getDay())), natal, today);
+        int love = clamp(loveAdj.score());
+        if (loveAdj.clashDetected()) hasClash = true;
 
+        // Work Score
         FortuneScoringWeights.CategoryWeights workWeights = weights.getCategoryWeights(FortuneCategory.WORK);
         int workBase =
             baseScore
                 + daily.count(wealth) * workWeights.wealthWeight()
                 + daily.count(resource) * workWeights.resourceWeight()
                 + daily.count(officer) * workWeights.officerWeight();
-        int work = clamp(
-            applyBranchRelationAdjustments(workBase, FortuneCategory.WORK, officer, natal, today)
-        );
+        var workAdj = applyBranchRelationAdjustments(workBase, FortuneCategory.WORK, officer, natal, today);
+        int work = clamp(workAdj.score());
+        if (workAdj.clashDetected()) hasClash = true;
 
+        // Social Score
         FortuneScoringWeights.CategoryWeights socialWeights = weights.getCategoryWeights(FortuneCategory.SOCIAL);
         int socialBase =
             baseScore
@@ -145,26 +152,40 @@ public class SajuFortuneCalculator {
                 + daily.count(officer) * socialWeights.officerWeight()
                 + daily.count(output) * socialWeights.outputWeight()
                 + daily.count(peer) * socialWeights.peerWeight();
-        int social = clamp(
-            applyBranchRelationAdjustments(socialBase, FortuneCategory.SOCIAL, peer, natal, today)
-        );
+        var socialAdj = applyBranchRelationAdjustments(socialBase, FortuneCategory.SOCIAL, peer, natal, today);
+        int social = clamp(socialAdj.score());
+        if (socialAdj.clashDetected()) hasClash = true;
 
+        // Health Score
         int healthBase =
             baseScore
                 + balanceBonus(natalCounts)
                 + daily.count(mostNeeded(natalCounts)) * 8
                 - daily.count(mostExcess(natalCounts)) * 4;
-        int health = clamp(
-            applyBranchRelationAdjustments(healthBase, FortuneCategory.HEALTH, dayMaster, natal, today)
-        );
+        var healthAdj = applyBranchRelationAdjustments(healthBase, FortuneCategory.HEALTH, dayMaster, natal, today);
+        int health = clamp(healthAdj.score());
+        if (healthAdj.clashDetected()) hasClash = true;
 
         int total = clamp((money + love + work + social + health) / 5);
+
+        Map<FortuneCategory, Integer> scores = Map.of(
+            FortuneCategory.MONEY, money,
+            FortuneCategory.LOVE, love,
+            FortuneCategory.HEALTH, health,
+            FortuneCategory.WORK, work,
+            FortuneCategory.SOCIAL, social
+        );
+
+        FortuneCategory highestCategory = scores.entrySet().stream().max(Map.Entry.comparingByValue()).get().getKey();
+        FortuneCategory lowestCategory = scores.entrySet().stream().min(Map.Entry.comparingByValue()).get().getKey();
+        Element dominantTodayElement = daily.dominantElement();
 
         Element luckyElement = mostNeeded(natalCounts);
         String luckyColor = pickLuckyColor(userId, fortuneDate, luckyElement);
         int luckyNumber = 1 + boundedHash(userId, fortuneDate, "luckyNumber", 45);
 
-        return new Result(total, money, love, health, work, social, luckyColor, luckyNumber);
+        return new Result(total, money, love, health, work, social, luckyColor, luckyNumber,
+            dominantTodayElement, highestCategory, lowestCategory, hasClash);
     }
 
     private Lunar toLunar(BirthCalendarType type, LocalDate date, LocalTime time, boolean isLeapMonth) {
@@ -185,9 +206,18 @@ public class SajuFortuneCalculator {
             .getLunar();
     }
 
+    private record AdjustmentResult(int score, boolean clashDetected) {}
+
     private record DailyElements(EnumMap<Element, Integer> counts) {
         int count(Element e) {
             return counts.getOrDefault(e, 0);
+        }
+
+        Element dominantElement() {
+            return counts.entrySet().stream()
+                .max(Map.Entry.comparingByValue())
+                .map(Map.Entry::getKey)
+                .orElse(Element.WOOD);
         }
     }
 
@@ -318,7 +348,7 @@ public class SajuFortuneCalculator {
         };
     }
 
-    private int applyBranchRelationAdjustments(
+    private AdjustmentResult applyBranchRelationAdjustments(
         int score,
         FortuneCategory category,
         Element relatedElement,
@@ -331,12 +361,15 @@ public class SajuFortuneCalculator {
         String natalTimeBranch = branchOf(natal.getTime());
         String todayDayBranch = branchOf(today.getDay());
 
+        boolean clashDetected = false;
+
         // 관련된 오행을 가진 원국 지지가 오늘 일지와 충이면 패널티
         String[] natalBranches = {natalYearBranch, natalMonthBranch, natalDayBranch, natalTimeBranch};
         for (String b : natalBranches) {
             if (b == null) continue;
             if (elementOfBranch(b) == relatedElement && BranchRelationUtils.isClash(b, todayDayBranch)) {
                 score -= weights.clashPenalty();
+                clashDetected = true;
             }
         }
 
@@ -349,14 +382,14 @@ public class SajuFortuneCalculator {
             natalTimeBranch,
             todayDayBranch
         );
-        if (BranchRelationUtils.isThreeHarmony(allBranches)) {
+        if (BranchRelationUtils.isThreeHarmony(allBranches.stream().filter(Objects::nonNull).toList())) {
             Element todayElement = elementOfBranch(todayDayBranch);
             if (todayElement == relatedElement) {
                 score += weights.harmonyBonus();
             }
         }
 
-        return score;
+        return new AdjustmentResult(score, clashDetected);
     }
 
     private Element mostExcess(EnumMap<Element, Integer> natalCounts) {
