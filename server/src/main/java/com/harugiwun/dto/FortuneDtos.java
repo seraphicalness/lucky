@@ -6,11 +6,21 @@ public class FortuneDtos {
 
     public record FortuneWidgetResponse(
         LocalDate date,
-        int totalScore,
+        boolean pending,
+        String pendingMessage,
+        Integer totalScore,
         String luckyColor,
-        int luckyNumber,
+        Integer luckyNumber,
         String summary
-    ) {}
+    ) {
+        public static FortuneWidgetResponse pending(LocalDate date) {
+            return new FortuneWidgetResponse(date, true, "탭하여 오늘 운세를 확인해주세요", null, null, null, null);
+        }
+
+        public static FortuneWidgetResponse of(LocalDate date, int totalScore, String luckyColor, int luckyNumber, String summary) {
+            return new FortuneWidgetResponse(date, false, null, totalScore, luckyColor, luckyNumber, summary);
+        }
+    }
 
     public record FortuneDetailResponse(
         LocalDate date,

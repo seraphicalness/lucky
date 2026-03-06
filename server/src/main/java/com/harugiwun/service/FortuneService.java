@@ -10,6 +10,7 @@ import com.harugiwun.repository.AppUserRepository;
 import com.harugiwun.repository.FortuneDailyRepository;
 import com.harugiwun.service.fortune.SajuFortuneCalculator;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -54,11 +55,15 @@ public class FortuneService {
             });
     }
 
+    /**
+     * 자정 배치: 최근 30일 이내 활성 유저만 대상으로 다음날 운세 미리 생성.
+     * 앱을 지운 비활성 유저는 건너뜀.
+     */
     @Scheduled(cron = "0 0 0 * * *")
-    @SuppressWarnings("null")
-    public void preGenerateAllFortunes() {
+    public void preGenerateActiveUserFortunes() {
         LocalDate tomorrow = LocalDate.now().plusDays(1);
-        appUserRepository.findAll().forEach(user -> {
+        LocalDateTime since = LocalDateTime.now().minusDays(30);
+        appUserRepository.findAllByLastActiveAtAfter(since).forEach(user -> {
             if (user.getId() == null) return;
             try {
                 generateDailyFortune(user.getId(), tomorrow);
@@ -68,20 +73,26 @@ public class FortuneService {
         });
     }
 
-    @Transactional
+    /**
+     * 위젯 전용: 이미 생성된 운세만 반환.
+     * 오늘 운세가 없으면 pending 상태 반환 → 앱을 열어야 생성됨.
+     */
+    @Transactional(readOnly = true)
     public FortuneDtos.FortuneWidgetResponse getTodayWidget(Long userId) {
-        FortuneDaily fortune = generateDailyFortune(userId, LocalDate.now());
-        return new FortuneDtos.FortuneWidgetResponse(
-            fortune.getFortuneDate(),
-            fortune.getTotalScore(),
-            fortune.getLuckyColor(),
-            fortune.getLuckyNumber(),
-            fortune.getWidgetSummary()
-        );
+        return fortuneDailyRepository
+            .findByUserIdAndFortuneDate(userId, LocalDate.now())
+            .map(f -> FortuneDtos.FortuneWidgetResponse.of(
+                f.getFortuneDate(), f.getTotalScore(), f.getLuckyColor(), f.getLuckyNumber(), f.getWidgetSummary()
+            ))
+            .orElse(FortuneDtos.FortuneWidgetResponse.pending(LocalDate.now()));
     }
 
+    /**
+     * 앱 진입 시 호출: 운세 생성(없으면) + lastActiveAt 갱신.
+     */
     @Transactional
     public FortuneDtos.FortuneDetailResponse getTodayDetail(Long userId) {
+        touchLastActive(userId);
         FortuneDaily fortune = generateDailyFortune(userId, LocalDate.now());
         return new FortuneDtos.FortuneDetailResponse(
             fortune.getFortuneDate(),
@@ -96,6 +107,13 @@ public class FortuneService {
             fortune.getWidgetSummary(),
             fortune.getDetailText()
         );
+    }
+
+    private void touchLastActive(Long userId) {
+        appUserRepository.findById(userId).ifPresent(user -> {
+            user.setLastActiveAt(LocalDateTime.now());
+            appUserRepository.save(user);
+        });
     }
 
     private FortuneDaily createAndSaveFortune(Long userId, LocalDate date) {
