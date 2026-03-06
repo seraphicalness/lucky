@@ -11,6 +11,7 @@ import com.harugiwun.dto.AuthDtos;
 import com.harugiwun.repository.AppUserAuthRepository;
 import com.harugiwun.repository.AppUserProfileRepository;
 import com.harugiwun.repository.AppUserRepository;
+import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -70,6 +71,9 @@ public class AuthService {
             }
             appUserProfileRepository.save(profile);
         }
+
+        user.setLastActiveAt(LocalDateTime.now());
+        appUserRepository.save(user);
 
         String token = jwtUtil.createToken(user.getId());
         return new AuthDtos.SocialLoginResponse(user.getId(), token);
