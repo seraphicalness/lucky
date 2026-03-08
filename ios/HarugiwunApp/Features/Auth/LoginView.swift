@@ -1,18 +1,18 @@
-﻿import SwiftUI
+import SwiftUI
 
 struct LoginView: View {
     @EnvironmentObject private var session: SessionStore
 
     var body: some View {
         VStack(spacing: 20) {
-            Text("?섎（湲곗슫")
+            Text("하루긔운")
                 .font(.largeTitle)
                 .bold()
 
             Button(action: mockAppleLogin) {
-                Text("Apple濡?濡쒓렇??(Mock)")
+                Text("Apple로 로그인(Mock)")
                     .frame(maxWidth: .infinity)
-                    .padding()
+                    .padding() 
                     .background(Color.black)
                     .foregroundStyle(.white)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -22,7 +22,6 @@ struct LoginView: View {
     }
 
     private func mockAppleLogin() {
-        session.token = "mock-token"
-        session.userId = 1
+        session.needsOnboarding = true
     }
 }
