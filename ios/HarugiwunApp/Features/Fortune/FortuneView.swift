@@ -1,4 +1,4 @@
-﻿import SwiftUI
+import SwiftUI
 
 struct FortuneView: View {
     @State private var fortune: FortuneDetailResponse?
@@ -6,29 +6,25 @@ struct FortuneView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("?ㅻ뒛??珥앹젏: \(fortune?.totalScore ?? 0)")
+                Text("오늘의 총점: \(fortune?.totalScore ?? 0)")
                     .font(.title2)
                     .bold()
 
-                categoryRow("湲덉쟾", fortune?.moneyScore)
-                categoryRow("?곗븷", fortune?.loveScore)
-                categoryRow("嫄닿컯", fortune?.healthScore)
-                categoryRow("??, fortune?.workScore)
-                categoryRow("?멸컙愿怨?, fortune?.socialScore)
+                categoryRow("재물", fortune?.moneyScore)
+                categoryRow("연애", fortune?.loveScore)
+                categoryRow("건강", fortune?.healthScore)
+                categoryRow("직장", fortune?.workScore)
+                categoryRow("인간관계", fortune?.socialScore)
 
-                Text(fortune?.summary ?? "?붿빟???ш린???쒖떆?⑸땲??")
+                Text(fortune?.summary ?? "로딩 중입니다. 잠시만 기다려주세요.")
                     .padding(.top, 8)
 
-                Text(fortune?.detailText ?? "?곸꽭 ?댁꽭媛 ?ш린???쒖떆?⑸땲??")
+                Text(fortune?.detailText ?? "상세 운세는 로딩 중입니다. 잠시만 기다려주세요.")
                     .foregroundStyle(.secondary)
-
-                NavigationLink("?꾨줈???ㅼ젙") {
-                    ProfileView()
-                }
             }
             .padding()
         }
-        .navigationTitle("?섎（湲곗슫")
+        .navigationTitle("운세")
         .task {
             fortune = FortuneDetailResponse(
                 date: "2026-02-23",
@@ -40,8 +36,8 @@ struct FortuneView: View {
                 socialScore: 84,
                 luckyColor: "Blue",
                 luckyNumber: 7,
-                summary: "臾대궃?섍퀬 ?덉젙?곸씤 ?섎（?덉슂.",
-                detailText: "??臾대━ ?놁씠 ?먮쫫???硫?醫뗭? 寃곌낵媛 ?섏샃?덈떎."
+                summary: "좋은 하루 보내시고 행운 가득한 하루 되세요.",
+                detailText: "오늘 하루가 당신에게 따뜻한 결과를 가져다 줄 것입니다."
             )
         }
     }
