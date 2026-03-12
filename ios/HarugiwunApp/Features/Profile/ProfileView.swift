@@ -7,6 +7,9 @@ struct ProfileView: View {
 
     @State private var profile: ProfileResponse? = nil
     @State private var saju: SajuResponse? = nil
+    @State private var isLoading = false
+    @State private var errorMessage: String? = nil
+    @State private var showEditProfile = false
 
     var body: some View {
         ScrollView {
@@ -29,7 +32,20 @@ struct ProfileView: View {
         }
         .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
-        .task { loadMockData() }
+        .task { await loadData() }
+        .overlay { if isLoading { ProgressView() } }
+        .alert("오류", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+            Button("확인") {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
+        .sheet(isPresented: $showEditProfile) {
+            if let profile, let token = session.token {
+                EditProfileView(token: token, profile: profile) { updated in
+                    self.profile = updated
+                }
+            }
+        }
     }
 
     // MARK: - 프로필 헤더
@@ -47,7 +63,7 @@ struct ProfileView: View {
 
             if let s = saju, let p = profile {
                 let genderLabel = p.gender == "MALE" ? "남자" : p.gender == "FEMALE" ? "여자" : ""
-                Text("\(s.dayPillarName)일주 \(genderLabel)")
+                Text("\(s.dayPillarName) \(genderLabel)")
                     .font(.system(size: 15))
                     .foregroundStyle(.secondary)
             }
@@ -67,16 +83,35 @@ struct ProfileView: View {
                     count: validPillars.count
                 )
 
+                // 연 · 월 · 일 · 시 라벨
+                let titles = ["연주", "월주", "일주", "시주"]
+                HStack {
+                    ForEach(0..<validPillars.count, id: \.self) { i in
+                        Text(titles[i])
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color(UIColor.secondaryLabel))
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+
                 // 천간 (stems)
                 LazyVGrid(columns: columns, spacing: 14) {
                     ForEach(validPillars.indices, id: \.self) { i in
-                        elementCircle(validPillars[i].stemElement)
+                        elementCircle(
+                            hanja: stemHanja(from: validPillars[i]),
+                            korean: validPillars[i].stemKorean,
+                            element: validPillars[i].stemElement
+                        )
                     }
                 }
                 // 지지 (branches)
                 LazyVGrid(columns: columns, spacing: 14) {
                     ForEach(validPillars.indices, id: \.self) { i in
-                        elementCircle(validPillars[i].branchElement)
+                        elementCircle(
+                            hanja: branchHanja(from: validPillars[i]),
+                            korean: validPillars[i].branchKorean,
+                            element: validPillars[i].branchElement
+                        )
                     }
                 }
             } else {
@@ -99,10 +134,19 @@ struct ProfileView: View {
     }
 
     @ViewBuilder
-    private func elementCircle(_ element: String) -> some View {
-        Circle()
-            .fill(color(for: element))
-            .aspectRatio(1, contentMode: .fit)
+    private func elementCircle(hanja: String, korean: String, element: String) -> some View {
+        ZStack {
+            Circle()
+                .fill(color(for: element))
+            VStack(spacing: 2) {
+                Text(hanja)
+                    .font(.system(size: 16, weight: .semibold))
+                Text(korean)
+                    .font(.system(size: 11))
+            }
+            .foregroundStyle(.white)
+        }
+        .aspectRatio(1, contentMode: .fit)
     }
 
     // MARK: - 설정 메뉴 카드
@@ -110,7 +154,7 @@ struct ProfileView: View {
     private var settingsCard: some View {
         VStack(spacing: 0) {
             menuRow(icon: "person.crop.circle", label: "정보 수정하기") {
-                // TODO: 정보 수정 화면 이동
+                showEditProfile = true
             }
             menuDivider
             menuRow(icon: "megaphone", label: "알림 설정") {
@@ -129,9 +173,7 @@ struct ProfileView: View {
 
     private var logoutCard: some View {
         menuRow(icon: "rectangle.portrait.and.arrow.right", label: "로그아웃") {
-            session.token = nil
-            session.userId = nil
-            session.needsOnboarding = false
+            session.logout()
         }
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -173,6 +215,20 @@ struct ProfileView: View {
         }
     }
 
+    // MARK: - 한자 분리
+
+    private func stemHanja(from pillar: PillarInfo) -> String {
+        let chars = Array(pillar.characters)
+        guard !chars.isEmpty else { return "" }
+        return String(chars[0])
+    }
+
+    private func branchHanja(from pillar: PillarInfo) -> String {
+        let chars = Array(pillar.characters)
+        guard chars.count >= 2 else { return "" }
+        return String(chars[1])
+    }
+
     // MARK: - 날짜 포맷
 
     private func birthInfoString(_ dateStr: String, time: String?) -> String {
@@ -189,29 +245,111 @@ struct ProfileView: View {
         return "\(y)년 \(m)월 \(d)일생"
     }
 
-    // MARK: - Mock 데이터 (API 연동 전)
+    // MARK: - API
 
-    private func loadMockData() {
-        profile = ProfileResponse(
-            userId: 1,
-            nickname: "김나희",
-            birthDate: "2000-01-01",
-            birthTime: "12:12:00",
-            gender: "FEMALE",
-            birthCalendarType: "SOLAR",
-            birthIsLeapMonth: false
-        )
-        saju = SajuResponse(
-            yearPillar:  PillarInfo(characters: "경진", stemKorean: "경", branchKorean: "진", stemElement: "금", branchElement: "토"),
-            monthPillar: PillarInfo(characters: "무인", stemKorean: "무", branchKorean: "인", stemElement: "목", branchElement: "목"),
-            dayPillar:   PillarInfo(characters: "신축", stemKorean: "신", branchKorean: "축", stemElement: "목", branchElement: "토"),
-            timePillar:  PillarInfo(characters: "임오", stemKorean: "임", branchKorean: "오", stemElement: "수", branchElement: "수"),
-            dayMasterKorean: "신",
-            dayMasterElement: "금",
-            dayPillarName: "신축",
-            dayMasterStrength: "신약",
-            elementDistribution: ["목": 3, "화": 0, "토": 2, "금": 2, "수": 1],
-            yongsin: "화"
-        )
+    private func loadData() async {
+        guard let token = session.token else { return }
+        isLoading = true
+        do {
+            async let profileResult = ProfileAPI.fetchProfile(token: token)
+            async let sajuResult = ProfileAPI.fetchSaju(token: token)
+            profile = try await profileResult
+            saju = try? await sajuResult  // 사주 실패해도 프로필은 표시
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+        isLoading = false
+    }
+}
+
+// MARK: - Edit Profile
+
+private struct EditProfileView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let token: String
+    let profile: ProfileResponse
+    let onUpdated: (ProfileResponse) -> Void
+
+    @State private var nickname: String
+    @State private var isSaving = false
+    @State private var errorMessage: String? = nil
+
+    init(token: String, profile: ProfileResponse, onUpdated: @escaping (ProfileResponse) -> Void) {
+        self.token = token
+        self.profile = profile
+        self.onUpdated = onUpdated
+        _nickname = State(initialValue: profile.nickname)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(header: Text("프로필")) {
+                    TextField("이름", text: $nickname)
+                        .autocorrectionDisabled()
+                }
+                if let id = profile.userId as Int? {
+                    Section(header: Text("내 유저 ID")) {
+                        Text("\(id)")
+                            .font(.system(size: 15, weight: .medium))
+                    }
+                }
+            }
+            .navigationTitle("정보 수정하기")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("닫기") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        Task { await save() }
+                    } label: {
+                        if isSaving {
+                            ProgressView()
+                        } else {
+                            Text("저장")
+                        }
+                    }
+                    .disabled(nickname.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
+                }
+            }
+            .alert("오류", isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button("확인") { errorMessage = nil }
+            } message: {
+                Text(errorMessage ?? "")
+            }
+        }
+    }
+
+    private func save() async {
+        guard let birthDate = profile.birthDate else {
+            errorMessage = "생년월일 정보가 없어 수정할 수 없어요."
+            return
+        }
+        isSaving = true
+        do {
+            let req = ProfileUpdateRequest(
+                nickname: nickname,
+                birthDate: birthDate,
+                birthTime: profile.birthTime,
+                gender: profile.gender,
+                birthCalendarType: profile.birthCalendarType,
+                birthIsLeapMonth: profile.birthIsLeapMonth
+            )
+            let updated = try await ProfileAPI.updateProfile(token: token, request: req)
+            await MainActor.run {
+                onUpdated(updated)
+                dismiss()
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+                isSaving = false
+            }
+        }
     }
 }
