@@ -36,10 +36,14 @@ public class AuthService {
     }
 
     @Transactional
-    public AuthDtos.SocialLoginResponse mockAppleLogin(AuthDtos.SocialLoginRequest request) {
+    public AuthDtos.SocialLoginResponse appleLogin(AuthDtos.SocialLoginRequest request) {
         if (request.providerUserId() == null || request.providerUserId().isBlank()) {
             throw new IllegalArgumentException("providerUserId is required");
         }
+
+        // TODO: [Security] Verify Apple Identity Token signature here.
+        // Currently, it trusts the client input which is INSECURE for production.
+        // Integration with Apple Public Keys is required.
 
         AppUser user = appUserAuthRepository
             .findByProviderAndProviderUserId(AuthProvider.APPLE, request.providerUserId())
@@ -81,7 +85,8 @@ public class AuthService {
 
     private AppUser createUserWithAuth(AuthDtos.SocialLoginRequest request) {
         AppUser user = new AppUser();
-        user.setNickname(request.nickname() == null || request.nickname().isBlank() ? "?섎（湲곗슫?좎?" : request.nickname());
+        // Fix: Correct Hangul encoding for default nickname
+        user.setNickname(request.nickname() == null || request.nickname().isBlank() ? "하루기운유저" : request.nickname());
         AppUser savedUser = appUserRepository.save(user);
 
         AppUserAuth auth = new AppUserAuth();

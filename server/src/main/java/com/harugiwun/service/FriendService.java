@@ -48,6 +48,10 @@ public class FriendService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 친구 신청을 보냈습니다");
         }
 
+        if (friendRequestRepository.existsByFromUserIdAndToUserIdAndStatus(toUserId, fromUserId, FriendRequestStatus.PENDING)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "상대방이 이미 친구 신청을 보냈습니다. 받은 요청을 확인해주세요.");
+        }
+
         FriendRequest request = new FriendRequest();
         request.setFromUser(fromUser);
         request.setToUser(toUser);

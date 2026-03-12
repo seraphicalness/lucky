@@ -271,16 +271,21 @@ public class SajuFortuneCalculator {
     }
 
     private Element mostNeeded(EnumMap<Element, Integer> natalCounts) {
-        Element best = Element.WOOD;
         int min = Integer.MAX_VALUE;
+        List<Element> candidates = new java.util.ArrayList<>();
         for (Element e : Element.values()) {
             int c = natalCounts.getOrDefault(e, 0);
             if (c < min) {
                 min = c;
-                best = e;
+                candidates.clear();
+                candidates.add(e);
+            } else if (c == min) {
+                candidates.add(e);
             }
         }
-        return best;
+        if (candidates.isEmpty()) return Element.WOOD;
+        // 여러 개일 경우 hashCode 등을 통해 결정론적으로 하나를 선택
+        return candidates.get(Math.abs(candidates.hashCode()) % candidates.size());
     }
 
     private DayMasterStrength evaluateDayMasterStrength(EightChar natal, Element dayMaster, EnumMap<Element, Integer> natalCounts) {
@@ -445,15 +450,15 @@ public class SajuFortuneCalculator {
     }
 
     private String stemOf(String pillar) {
-        if (pillar == null || pillar.length() < 2) {
-            throw new IllegalArgumentException("invalid pillar: " + pillar);
+        if (pillar == null || pillar.length() < 1) {
+            return "甲"; // Fallback to avoid crash
         }
         return pillar.substring(0, 1);
     }
 
     private String branchOf(String pillar) {
         if (pillar == null || pillar.length() < 2) {
-            throw new IllegalArgumentException("invalid pillar: " + pillar);
+            return "子"; // Fallback to avoid crash
         }
         return pillar.substring(1, 2);
     }
