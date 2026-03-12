@@ -1,6 +1,7 @@
 package com.harugiwun.config;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
@@ -9,9 +10,7 @@ import java.time.Instant;
 import java.util.Date;
 import javax.crypto.SecretKey;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 
 @Component
 public class JwtUtil {
@@ -23,6 +22,9 @@ public class JwtUtil {
         @Value("${security.jwt.secret}") String secret,
         @Value("${security.jwt.expiration-seconds}") long expirationSeconds
     ) {
+        if (secret.length() < 32) {
+            throw new IllegalArgumentException("JWT Secret must be at least 32 characters long");
+        }
         this.signingKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expirationSeconds = expirationSeconds;
     }
@@ -37,16 +39,16 @@ public class JwtUtil {
             .compact();
     }
 
-    public Long resolveUserId(String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing bearer token");
+    public Long validateAndGetUserId(String token) {
+        try {
+            Claims claims = Jwts.parserBuilder()
+                .setSigningKey(signingKey)
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+            return Long.parseLong(claims.getSubject());
+        } catch (JwtException | IllegalArgumentException e) {
+            return null;
         }
-        String token = authHeader.substring(7);
-        Claims claims = Jwts.parserBuilder()
-            .setSigningKey(signingKey)
-            .build()
-            .parseClaimsJws(token)
-            .getBody();
-        return Long.parseLong(claims.getSubject());
     }
 }
