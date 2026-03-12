@@ -1,40 +1,104 @@
-﻿import Foundation
+import Foundation
+
+// MARK: - API Error
+
+enum APIError: LocalizedError {
+    case httpError(Int, String)
+    case decodingError(Error)
+    case networkError(Error)
+
+    var errorDescription: String? {
+        switch self {
+        case .httpError(401, _): return "로그인이 만료됐어요. 다시 로그인해 주세요."
+        case .httpError(403, _): return "접근 권한이 없습니다."
+        case .httpError(404, _): return "데이터를 찾을 수 없습니다."
+        case .httpError(400, let msg): return "요청 오류: \(msg)"
+        case .httpError(let code, _): return "서버 오류 (\(code))"
+        case .decodingError: return "데이터 파싱 오류"
+        case .networkError: return "네트워크 연결을 확인해 주세요."
+        }
+    }
+}
+
+// MARK: - APIClient
 
 final class APIClient {
     static let shared = APIClient()
 
-    private let baseURL = URL(string: "http://localhost:8080")!
+    /// 로컬 개발: http://localhost:8080
+    /// 배포 후: 실제 서버 주소로 변경
+    let baseURL = URL(string: "http://localhost:8080")!
+
+    // MARK: - Decodable Response
 
     func request<T: Decodable>(
         path: String,
         method: String = "GET",
         token: String? = nil,
-        body: Data? = nil,
-        responseType: T.Type
+        body: Encodable? = nil,
+        responseType: T.Type,
+        queryItems: [URLQueryItem]? = nil
     ) async throws -> T {
-        // Remove leading slash if present to avoid double slashes when appending
-        let cleanPath = path.hasPrefix("/") ? String(path.dropFirst()) : path
-        var request = URLRequest(url: baseURL.appendingPathComponent(cleanPath))
-        request.httpMethod = method
-        request.httpBody = body
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let token {
-            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let req = try buildRequest(path: path, method: method, token: token, body: body, queryItems: queryItems)
+        let (data, response) = try await execute(req)
+        guard let http = response as? HTTPURLResponse else { throw APIError.networkError(URLError(.badServerResponse)) }
+        try checkStatus(http, data: data)
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            throw APIError.decodingError(error)
         }
+    }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw URLError(.badServerResponse)
+    // MARK: - Void Response
+
+    func requestVoid(
+        path: String,
+        method: String = "POST",
+        token: String? = nil,
+        body: Encodable? = nil,
+        queryItems: [URLQueryItem]? = nil
+    ) async throws {
+        let req = try buildRequest(path: path, method: method, token: token, body: body, queryItems: queryItems)
+        let (data, response) = try await execute(req)
+        guard let http = response as? HTTPURLResponse else { throw APIError.networkError(URLError(.badServerResponse)) }
+        try checkStatus(http, data: data)
+    }
+
+    // MARK: - Private Helpers
+
+    private func buildRequest(
+        path: String,
+        method: String,
+        token: String?,
+        body: Encodable?,
+        queryItems: [URLQueryItem]?
+    ) throws -> URLRequest {
+        let cleanPath = path.hasPrefix("/") ? String(path.dropFirst()) : path
+        var components = URLComponents(url: baseURL.appendingPathComponent(cleanPath), resolvingAgainstBaseURL: false)!
+        components.queryItems = queryItems
+
+        var req = URLRequest(url: components.url!)
+        req.httpMethod = method
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        if let body { req.httpBody = try JSONEncoder().encode(body) }
+        return req
+    }
+
+    private func execute(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        do {
+            return try await URLSession.shared.data(for: request)
+        } catch {
+            throw APIError.networkError(error)
         }
-        
-        guard 200..<300 ~= httpResponse.statusCode else {
-            // For debugging, print body string on error
-            if let errorText = String(data: data, encoding: .utf8) {
-                print("API Error [\(httpResponse.statusCode)]: \(errorText)")
-            }
-            throw URLError(.badServerResponse)
+    }
+
+    private func checkStatus(_ response: HTTPURLResponse, data: Data) throws {
+        guard 200..<300 ~= response.statusCode else {
+            let msg = String(data: data, encoding: .utf8) ?? ""
+            print("❌ API [\(response.statusCode)] \(response.url?.path ?? ""): \(msg)")
+            throw APIError.httpError(response.statusCode, msg)
         }
-        
-        return try JSONDecoder().decode(T.self, from: data)
     }
 }
