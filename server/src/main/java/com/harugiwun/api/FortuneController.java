@@ -1,10 +1,9 @@
 package com.harugiwun.api;
 
-import com.harugiwun.config.JwtUtil;
 import com.harugiwun.dto.FortuneDtos;
 import com.harugiwun.service.FortuneService;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -13,22 +12,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class FortuneController {
 
     private final FortuneService fortuneService;
-    private final JwtUtil jwtUtil;
 
-    public FortuneController(FortuneService fortuneService, JwtUtil jwtUtil) {
+    public FortuneController(FortuneService fortuneService) {
         this.fortuneService = fortuneService;
-        this.jwtUtil = jwtUtil;
     }
 
     @GetMapping("/widget")
-    public FortuneDtos.FortuneWidgetResponse todayWidget(@RequestHeader("Authorization") String authHeader) {
-        Long userId = jwtUtil.resolveUserId(authHeader);
+    public FortuneDtos.FortuneWidgetResponse todayWidget(@AuthenticationPrincipal Long userId) {
         return fortuneService.getTodayWidget(userId);
     }
 
     @GetMapping
-    public FortuneDtos.FortuneDetailResponse today(@RequestHeader("Authorization") String authHeader) {
-        Long userId = jwtUtil.resolveUserId(authHeader);
+    public FortuneDtos.FortuneDetailResponse today(@AuthenticationPrincipal Long userId) {
         return fortuneService.getTodayDetail(userId);
     }
 }
