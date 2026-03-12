@@ -292,8 +292,29 @@ struct OnboardingView: View {
     }
 
     private func completeOnboarding() {
-        // TODO: POST /api/v1/auth/social/login with name, birthDate, birthHour, gender
-        session.token = "mock-token"
+        // TODO: Call AuthAPI.socialLogin(...)
+        /*
+        Task {
+            do {
+                let req = SocialLoginRequest(
+                    providerUserId: "test-user-id", // Real ID from Apple Auth
+                    nickname: name,
+                    birthDate: birthDate,
+                    ...
+                )
+                let res = try await AuthAPI.login(req)
+                session.token = res.token
+                session.userId = res.userId
+                session.needsOnboarding = false
+            } catch {
+                print("Login failed: \(error)")
+            }
+        }
+        */
+        
+        // Temporary Mock for Testing
+        print("Mock Login with: Name=\(name), Birth=\(String(describing: birthDate)), Gender=\(String(describing: gender))")
+        session.token = "mock-token-for-testing"
         session.userId = 1
         session.needsOnboarding = false
     }

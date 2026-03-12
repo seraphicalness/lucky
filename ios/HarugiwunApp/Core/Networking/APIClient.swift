@@ -3,7 +3,7 @@
 final class APIClient {
     static let shared = APIClient()
 
-    private let baseURL = URL(string: "https://api.example.com")!
+    private let baseURL = URL(string: "http://localhost:8080")!
 
     func request<T: Decodable>(
         path: String,
@@ -12,7 +12,9 @@ final class APIClient {
         body: Data? = nil,
         responseType: T.Type
     ) async throws -> T {
-        var request = URLRequest(url: baseURL.appendingPathComponent(path))
+        // Remove leading slash if present to avoid double slashes when appending
+        let cleanPath = path.hasPrefix("/") ? String(path.dropFirst()) : path
+        var request = URLRequest(url: baseURL.appendingPathComponent(cleanPath))
         request.httpMethod = method
         request.httpBody = body
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -21,9 +23,18 @@ final class APIClient {
         }
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse, 200..<300 ~= httpResponse.statusCode else {
+        guard let httpResponse = response as? HTTPURLResponse else {
             throw URLError(.badServerResponse)
         }
+        
+        guard 200..<300 ~= httpResponse.statusCode else {
+            // For debugging, print body string on error
+            if let errorText = String(data: data, encoding: .utf8) {
+                print("API Error [\(httpResponse.statusCode)]: \(errorText)")
+            }
+            throw URLError(.badServerResponse)
+        }
+        
         return try JSONDecoder().decode(T.self, from: data)
     }
 }
