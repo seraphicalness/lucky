@@ -6,13 +6,14 @@ spring:
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
     open-in-view: false
 
 security:
   jwt:
-    secret: change-me-at-least-32-characters
+    # 환경 변수 JWT_SECRET을 반드시 설정해야 합니다. (최소 32자 이상)
+    secret: ${JWT_SECRET}
     expiration-seconds: 86400

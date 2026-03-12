@@ -1,19 +1,22 @@
-﻿# ?섎（湲곗슫 API ?뺤쓽
+# 하루기운 API 정의
 
-## ?몄쬆
+## 인증
 
 ### `POST /api/v1/auth/social/login`
-- ?ㅻ챸: Apple 濡쒓렇??紐?API
-- ?붿껌
+- 설명: Apple 로그인 및 회원가입
+- 요청
 ```json
 {
   "providerUserId": "apple-user-123",
-  "nickname": "?섎（",
+  "nickname": "하루",
   "birthDate": "1995-05-12",
-  "birthTime": "09:30:00"
+  "birthTime": "09:30:00",
+  "gender": "MALE",
+  "birthCalendarType": "SOLAR",
+  "birthIsLeapMonth": false
 }
 ```
-- ?묐떟
+- 응답
 ```json
 {
   "userId": 1,
@@ -21,28 +24,35 @@
 }
 ```
 
-## ?꾨줈??
+## 프로필
 ### `GET /api/v1/profile`
-- ?ㅻ뜑: `Authorization: Bearer <jwt>`
-- ?묐떟: ?ъ슜???꾨줈???뺣낫
+- 헤더: `Authorization: Bearer <jwt>`
+- 응답: 사용자 프로필 정보
 
 ### `PUT /api/v1/profile`
-- ?ㅻ뜑: `Authorization: Bearer <jwt>`
-- ?붿껌
+- 헤더: `Authorization: Bearer <jwt>`
+- 요청
 ```json
 {
-  "nickname": "?덈땳?ㅼ엫",
+  "nickname": "닉네임",
   "birthDate": "1995-05-12",
   "birthTime": "09:30:00"
 }
 ```
 
-## ?댁꽭
+## 운세
 
 ### `GET /api/v1/fortune/today/widget`
-- ?ㅻ뜑: `Authorization: Bearer <jwt>`
-- ?ㅻ챸: ?꾩젽???붿빟 ?댁꽭
+- 헤더: `Authorization: Bearer <jwt>`
+- 설명: 위젯용 요약 운세
 
 ### `GET /api/v1/fortune/today`
-- ?ㅻ뜑: `Authorization: Bearer <jwt>`
-- ?ㅻ챸: ?곸꽭 ?댁꽭(珥앹젏 + 5媛?移댄뀒怨좊━ + ?띿뒪??
+- 헤더: `Authorization: Bearer <jwt>`
+- 설명: 상세 운세(총점 + 5개 카테고리 + 텍스트)
+
+## 친구
+### `POST /api/v1/friends/request`
+- 요청: `{"toUserId": 123}`
+
+### `POST /api/v1/friends/request/respond`
+- 요청: `{"requestId": 1, "action": "ACCEPTED"}`
