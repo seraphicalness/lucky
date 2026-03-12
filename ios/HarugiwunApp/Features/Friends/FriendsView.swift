@@ -1,11 +1,11 @@
-﻿import SwiftUI
+import SwiftUI
 
 struct FriendsView: View {
     var body: some View {
         List {
-            Text("移쒓뎄 A - 珥앹젏 82")
-            Text("移쒓뎄 B - 珥앹젏 74")
+            Text("친구 A - 점수 82")
+            Text("친구 B - 점수 74")
         }
-        .navigationTitle("移쒓뎄 鍮꾧탳")
+        .navigationTitle("친구")
     }
 }
