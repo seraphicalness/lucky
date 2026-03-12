@@ -1,13 +1,12 @@
 package com.harugiwun.api;
 
-import com.harugiwun.config.JwtUtil;
 import com.harugiwun.domain.ad.AdFeature;
 import com.harugiwun.dto.CompatibilityDtos;
 import com.harugiwun.service.CompatibilityService;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -17,11 +16,9 @@ import org.springframework.web.bind.annotation.RestController;
 public class CompatibilityController {
 
     private final CompatibilityService compatibilityService;
-    private final JwtUtil jwtUtil;
 
-    public CompatibilityController(CompatibilityService compatibilityService, JwtUtil jwtUtil) {
+    public CompatibilityController(CompatibilityService compatibilityService) {
         this.compatibilityService = compatibilityService;
-        this.jwtUtil = jwtUtil;
     }
 
     /**
@@ -31,10 +28,9 @@ public class CompatibilityController {
      */
     @PostMapping("/ad-watch")
     public CompatibilityDtos.AdWatchResponse recordAdWatch(
-        @RequestHeader("Authorization") String authHeader,
+        @AuthenticationPrincipal Long userId,
         @RequestParam String feature
     ) {
-        Long userId = jwtUtil.resolveUserId(authHeader);
         AdFeature adFeature = AdFeature.valueOf(feature.toUpperCase());
         return compatibilityService.recordAdWatch(userId, adFeature);
     }
@@ -44,10 +40,9 @@ public class CompatibilityController {
      */
     @GetMapping("/score/{friendUserId}")
     public CompatibilityDtos.ScoreCompareResponse compareScores(
-        @RequestHeader("Authorization") String authHeader,
+        @AuthenticationPrincipal Long myUserId,
         @PathVariable Long friendUserId
     ) {
-        Long myUserId = jwtUtil.resolveUserId(authHeader);
         return compatibilityService.compareScores(myUserId, friendUserId);
     }
 
@@ -56,10 +51,9 @@ public class CompatibilityController {
      */
     @GetMapping("/element/{friendUserId}")
     public CompatibilityDtos.ElementCompatibilityResponse elementCompatibility(
-        @RequestHeader("Authorization") String authHeader,
+        @AuthenticationPrincipal Long myUserId,
         @PathVariable Long friendUserId
     ) {
-        Long myUserId = jwtUtil.resolveUserId(authHeader);
         return compatibilityService.elementCompatibility(myUserId, friendUserId);
     }
 }

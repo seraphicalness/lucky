@@ -19,6 +19,6 @@ public class AuthController {
 
     @PostMapping("/social/login")
     public AuthDtos.SocialLoginResponse socialLogin(@RequestBody AuthDtos.SocialLoginRequest request) {
-        return authService.mockAppleLogin(request);
+        return authService.appleLogin(request);
     }
 }
