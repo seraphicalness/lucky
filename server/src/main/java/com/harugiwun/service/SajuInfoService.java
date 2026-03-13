@@ -3,6 +3,7 @@ package com.harugiwun.service;
 import com.harugiwun.domain.profile.AppUserProfile;
 import com.harugiwun.domain.profile.BirthCalendarType;
 import com.harugiwun.dto.SajuDtos;
+import com.harugiwun.service.fortune.TenGodCalculator;
 import com.nlf.calendar.EightChar;
 import com.nlf.calendar.Lunar;
 import com.nlf.calendar.Solar;
@@ -16,6 +17,12 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class SajuInfoService {
+
+    private final TenGodCalculator tenGodCalculator;
+
+    public SajuInfoService(TenGodCalculator tenGodCalculator) {
+        this.tenGodCalculator = tenGodCalculator;
+    }
 
     private static final Map<String, String> STEM_KOREAN = Map.of(
         "甲", "갑", "乙", "을", "丙", "병", "丁", "정", "戊", "무",
