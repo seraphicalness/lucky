@@ -4,6 +4,7 @@ import com.harugiwun.dto.FortuneDtos;
 import com.harugiwun.service.FortuneService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -25,5 +26,13 @@ public class FortuneController {
     @GetMapping
     public FortuneDtos.FortuneDetailResponse today(@AuthenticationPrincipal Long userId) {
         return fortuneService.getTodayDetail(userId);
+    }
+
+    @GetMapping("/friend/{friendUserId}")
+    public FortuneDtos.FortuneDetailResponse friendToday(
+        @AuthenticationPrincipal Long userId,
+        @PathVariable Long friendUserId
+    ) {
+        return fortuneService.getFriendTodayFortune(userId, friendUserId);
     }
 }
