@@ -6,7 +6,8 @@ public class FortunePeriod {
 
     public enum PeriodType {
         DAEWOON,
-        SEWOON
+        SEWOON,
+        WOLWOON
     }
 
     private final LocalDate startDate;

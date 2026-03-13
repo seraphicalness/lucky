@@ -23,10 +23,13 @@ public class FriendDtos {
     public record FriendResponse(
         Long friendUserId,
         String nickname,
-        LocalDateTime friendSince
+        LocalDateTime friendSince,
+        LocalDateTime lastActiveAt
     ) {}
 
     public record FriendListResponse(List<FriendResponse> friends) {}
 
     public record PendingRequestListResponse(List<FriendRequestResponse> requests) {}
+
+    public record NudgeResponse(boolean success, String message) {}
 }
