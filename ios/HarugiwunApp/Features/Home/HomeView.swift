@@ -1,15 +1,29 @@
 import SwiftUI
 
 struct HomeView: View {
+    @EnvironmentObject private var session: SessionStore
     @State private var totalScore: Int = 78
     @State private var summary: String = "좋은 하루 보내시고 행운 가득한 하루 되세요."
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("오늘의 운세")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
+                HStack {
+                    Text("오늘의 운세")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    HStack(spacing: 4) {
+                        Image(systemName: "p.circle.fill")
+                            .foregroundStyle(.yellow)
+                        Text("\(session.points) P")
+                            .font(.system(size: 14, weight: .bold))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color(.systemGray6))
+                    .clipShape(Capsule())
+                }
 
                 VStack(spacing: 12) {
                     Text("\(totalScore)")

@@ -35,21 +35,36 @@ struct ProfileView: View {
     // MARK: - 프로필 헤더
 
     private var profileHeader: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(profile?.nickname ?? "-")
-                .font(.system(size: 22, weight: .bold))
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(profile?.nickname ?? "-")
+                    .font(.system(size: 22, weight: .bold))
 
-            if let p = profile, let dateStr = p.birthDate {
-                Text(birthInfoString(dateStr, time: p.birthTime))
-                    .font(.system(size: 15))
-                    .foregroundStyle(.secondary)
+                if let p = profile, let dateStr = p.birthDate {
+                    Text(birthInfoString(dateStr, time: p.birthTime))
+                        .font(.system(size: 15))
+                        .foregroundStyle(.secondary)
+                }
+
+                if let s = saju, let p = profile {
+                    let genderLabel = p.gender == "MALE" ? "남자" : p.gender == "FEMALE" ? "여자" : ""
+                    Text("\(s.dayPillarName)일주 \(genderLabel)")
+                        .font(.system(size: 15))
+                        .foregroundStyle(.secondary)
+                }
             }
-
-            if let s = saju, let p = profile {
-                let genderLabel = p.gender == "MALE" ? "남자" : p.gender == "FEMALE" ? "여자" : ""
-                Text("\(s.dayPillarName)일주 \(genderLabel)")
-                    .font(.system(size: 15))
-                    .foregroundStyle(.secondary)
+            Spacer()
+            VStack(alignment: .trailing, spacing: 4) {
+                HStack(spacing: 4) {
+                    Image(systemName: "p.circle.fill")
+                        .foregroundStyle(.yellow)
+                    Text("\(session.points) P")
+                        .font(.system(size: 16, weight: .bold))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.white)
+                .clipShape(Capsule())
             }
         }
         .padding(.top, 4)
@@ -118,7 +133,18 @@ struct ProfileView: View {
             }
             menuDivider
             menuRow(icon: "questionmark.circle", label: "개발자에게 문의하기") {
-                // TODO: 문의하기
+                let email = "support@harugiwun.com"
+                if let url = URL(string: "mailto:\(email)") {
+                    UIApplication.shared.open(url)
+                }
+            }
+            menuDivider
+            menuRow(icon: "cup.and.saucer", label: "개발자에게 커피 사주기") {
+                // TODO: 실제 결제 연동 (App Store IAP 등)
+                // 임시로 토스나 카카오페이 등 결제 링크가 있다면 연결 가능
+                if let url = URL(string: "https://toss.me/harugiwun") {
+                    UIApplication.shared.open(url)
+                }
             }
         }
         .background(Color.white)
