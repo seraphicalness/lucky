@@ -95,10 +95,26 @@ public class FriendService {
             .map(f -> new FriendDtos.FriendResponse(
                 f.getFriendUser().getId(),
                 f.getFriendUser().getNickname(),
-                f.getCreatedAt()
+                f.getCreatedAt(),
+                f.getFriendUser().getLastActiveAt()
             ))
             .toList();
         return new FriendDtos.FriendListResponse(list);
+    }
+
+    @Transactional
+    public FriendDtos.NudgeResponse nudgeFriend(Long fromUserId, Long toUserId) {
+        if (!areFriends(fromUserId, toUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "친구가 아닙니다");
+        }
+        
+        AppUser fromUser = findUser(fromUserId);
+        AppUser toUser = findUser(toUserId);
+        
+        // TODO: 실제 Push 알림 발송 로직 (FCM/APNs)
+        System.out.println("Nudge from " + fromUser.getNickname() + " to " + toUser.getNickname());
+        
+        return new FriendDtos.NudgeResponse(true, toUser.getNickname() + "님을 콕 찔렀습니다!");
     }
 
     @Transactional(readOnly = true)
