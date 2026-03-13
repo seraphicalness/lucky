@@ -8,6 +8,7 @@ import com.harugiwun.dto.FortuneDtos;
 import com.harugiwun.repository.AppUserProfileRepository;
 import com.harugiwun.repository.AppUserRepository;
 import com.harugiwun.repository.FortuneDailyRepository;
+import com.harugiwun.repository.FriendRepository;
 import com.harugiwun.service.fortune.SajuFortuneCalculator;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -26,19 +27,22 @@ public class FortuneService {
     private final AppUserProfileRepository appUserProfileRepository;
     private final TemplateTextGenerator templateTextGenerator;
     private final SajuFortuneCalculator sajuFortuneCalculator;
+    private final FriendRepository friendRepository;
 
     public FortuneService(
         FortuneDailyRepository fortuneDailyRepository,
         AppUserRepository appUserRepository,
         AppUserProfileRepository appUserProfileRepository,
         TemplateTextGenerator templateTextGenerator,
-        SajuFortuneCalculator sajuFortuneCalculator
+        SajuFortuneCalculator sajuFortuneCalculator,
+        FriendRepository friendRepository
     ) {
         this.fortuneDailyRepository = fortuneDailyRepository;
         this.appUserRepository = appUserRepository;
         this.appUserProfileRepository = appUserProfileRepository;
         this.templateTextGenerator = templateTextGenerator;
         this.sajuFortuneCalculator = sajuFortuneCalculator;
+        this.friendRepository = friendRepository;
     }
 
     @Transactional
@@ -94,6 +98,27 @@ public class FortuneService {
     public FortuneDtos.FortuneDetailResponse getTodayDetail(Long userId) {
         touchLastActive(userId);
         FortuneDaily fortune = generateDailyFortune(userId, LocalDate.now());
+        return new FortuneDtos.FortuneDetailResponse(
+            fortune.getFortuneDate(),
+            fortune.getTotalScore(),
+            fortune.getMoneyScore(),
+            fortune.getLoveScore(),
+            fortune.getHealthScore(),
+            fortune.getWorkScore(),
+            fortune.getSocialScore(),
+            fortune.getLuckyColor(),
+            fortune.getLuckyNumber(),
+            fortune.getWidgetSummary(),
+            fortune.getDetailText()
+        );
+    }
+
+    @Transactional
+    public FortuneDtos.FortuneDetailResponse getFriendTodayFortune(Long userId, Long friendUserId) {
+        if (!friendRepository.existsByUserIdAndFriendUserId(userId, friendUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not a friend");
+        }
+        FortuneDaily fortune = generateDailyFortune(friendUserId, LocalDate.now());
         return new FortuneDtos.FortuneDetailResponse(
             fortune.getFortuneDate(),
             fortune.getTotalScore(),

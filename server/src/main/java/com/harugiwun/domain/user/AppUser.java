@@ -26,10 +26,17 @@ public class AppUser {
     @Column
     private LocalDateTime lastActiveAt;
 
+    @Column(nullable = false)
+    private Long points = 0L;
+
+    @Column
+    private java.time.LocalDate lastCheckInDate;
+
     @PrePersist
     public void prePersist() {
         this.createdAt = LocalDateTime.now();
         this.lastActiveAt = LocalDateTime.now();
+        if (this.points == null) this.points = 0L;
     }
 
     public Long getId() { return id; }
@@ -38,4 +45,8 @@ public class AppUser {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getLastActiveAt() { return lastActiveAt; }
     public void setLastActiveAt(LocalDateTime lastActiveAt) { this.lastActiveAt = lastActiveAt; }
+    public Long getPoints() { return points; }
+    public void setPoints(Long points) { this.points = points; }
+    public java.time.LocalDate getLastCheckInDate() { return lastCheckInDate; }
+    public void setLastCheckInDate(java.time.LocalDate lastCheckInDate) { this.lastCheckInDate = lastCheckInDate; }
 }

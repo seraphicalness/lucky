@@ -22,6 +22,7 @@ public class SajuDtos {
         String stemKorean,
         String branchKorean,
         String stemElement,
-        String branchElement
+        String branchElement,
+        String tenGod
     ) {}
 }

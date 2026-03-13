@@ -124,6 +124,50 @@ public class UnseTimelineService {
     }
 
     /**
+     * 월운(月運) 계산: 오호둔년법(五虎遁年法) 적용
+     */
+    public List<FortunePeriod> calculateWolwoon(int year) {
+        // 해당 연도의 천간 인덱스 (0=甲, 1=乙, ...)
+        int yearStemIdx = ((year - 4) % 10 + 10) % 10;
+        
+        // 오호둔년법: 1월(寅월)의 천간 결정
+        // 甲己년 -> 丙寅(2), 乙庚 -> 戊寅(4), 丙辛 -> 庚寅(6), 丁壬 -> 壬寅(8), 戊癸 -> 甲寅(0)
+        int startStemIdx = switch (yearStemIdx % 5) {
+            case 0 -> 2; // 甲, 己
+            case 1 -> 4; // 乙, 庚
+            case 2 -> 6; // 丙, 辛
+            case 3 -> 8; // 丁, 壬
+            case 4 -> 0; // 戊, 癸
+            default -> 0;
+        };
+
+        // 1월(寅월)의 60갑자 인덱스 (寅=index 2)
+        int startIndex = (startStemIdx * 6 + 2 * 5) % 60; 
+        // 위 수식 대신 직접 60갑자에서 찾기 (천간 index, 지지 index=2(寅))
+        for (int i = 0; i < 60; i++) {
+            String p = SEXAGENARY_CYCLE.get(i);
+            if (p.startsWith(List.of("甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸").get(startStemIdx)) 
+                && p.endsWith("寅")) {
+                startIndex = i;
+                break;
+            }
+        }
+
+        List<FortunePeriod> result = new ArrayList<>();
+        for (int month = 1; month <= 12; month++) {
+            int idx = (startIndex + (month - 1)) % 60;
+            String pillar = SEXAGENARY_CYCLE.get(idx);
+            String element = STEM_ELEMENT_CHINESE.getOrDefault(pillar.substring(0, 1), "木");
+
+            LocalDate start = LocalDate.of(year, month, 1);
+            LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
+
+            result.add(new FortunePeriod(start, end, pillar, element, FortunePeriod.PeriodType.WOLWOON));
+        }
+        return result;
+    }
+
+    /**
      * 대운 시작 나이 = 출생일에서 가장 가까운 절(節)까지의 날수 ÷ 3 (반올림, 최소 1)
      *
      * <p>순행이면 미래 방향, 역행이면 과거 방향으로 탐색한다.

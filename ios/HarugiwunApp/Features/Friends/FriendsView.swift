@@ -1,420 +1,204 @@
 import SwiftUI
 
+struct FriendResponse: Codable, Identifiable {
+    var id: Int { friendUserId }
+    let friendUserId: Int
+    let nickname: String
+    let friendSince: String
+    let lastActiveAt: String?
+
+    var isTodayActive: Bool {
+        guard let lastActiveAt = lastActiveAt else { return false }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate]
+        let todayStr = formatter.string(from: Date())
+        return lastActiveAt.hasPrefix(todayStr)
+    }
+}
+
+struct FriendListResponse: Codable {
+    let friends: [FriendResponse]
+}
+
+struct NudgeResponse: Codable {
+    let success: Bool
+    let message: String
+}
+
 struct FriendsView: View {
     @EnvironmentObject private var session: SessionStore
-
-    @State private var selectedTab: FriendsTab = .list
     @State private var friends: [FriendResponse] = []
-    @State private var pendingRequests: [FriendRequestResponse] = []
-    @State private var showSendRequest = false
-    @State private var sendTargetId: String = ""
-    @State private var alertMessage: String? = nil
-    @State private var isLoadingAction = false
-
-    enum FriendsTab { case list, requests }
+    @State private var isLoading = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            tabPicker
-            TabView(selection: $selectedTab) {
-                friendListTab.tag(FriendsTab.list)
-                requestsTab.tag(FriendsTab.requests)
+        List {
+            if friends.isEmpty && !isLoading {
+                Text("아직 친구가 없습니다.")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(friends) { friend in
+                    NavigationLink(destination: FriendFortuneView(friend: friend)) {
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(friend.nickname)
+                                    .font(.headline)
+                                Text(friend.isTodayActive ? "운세 확인 완료" : "아직 안 들어옴")
+                                    .font(.subheadline)
+                                    .foregroundStyle(friend.isTodayActive ? .green : .secondary)
+                            }
+                            Spacer()
+                            if !friend.isTodayActive {
+                                Button("콕 찌르기") {
+                                    nudge(friend: friend)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.small)
+                            }
+                        }
+                    }
+                }
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
         }
         .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle("친구")
-        .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showSendRequest = true
-                } label: {
-                    Image(systemName: "person.badge.plus")
-                        .foregroundStyle(AppTheme.tabGreen)
-                }
-            }
-        }
-        .sheet(isPresented: $showSendRequest) {
-            SendFriendRequestSheet(
-                targetId: $sendTargetId,
-                myUserId: session.userId,
-                onSend: { id in
-                    sendFriendRequest(toUserId: id)
-                    showSendRequest = false
-                }
-            )
-        }
-        .alert("알림", isPresented: Binding(
-            get: { alertMessage != nil },
-            set: { if !$0 { alertMessage = nil } }
-        )) {
-            Button("확인") { alertMessage = nil }
-        } message: {
-            Text(alertMessage ?? "")
-        }
-        .task { await loadData() }
+        .onAppear { fetchFriends() }
+        .refreshable { fetchFriends() }
     }
 
-    // MARK: - 탭 피커
-
-    private var tabPicker: some View {
-        HStack(spacing: 0) {
-            tabButton("친구 목록", tab: .list, badge: nil)
-            tabButton("신청 관리", tab: .requests, badge: pendingRequests.isEmpty ? nil : pendingRequests.count)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(Color(UIColor.systemGroupedBackground))
-    }
-
-    private func tabButton(_ title: String, tab: FriendsTab, badge: Int?) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) { selectedTab = tab }
-        } label: {
-            HStack(spacing: 4) {
-                Text(title)
-                    .font(.system(size: 15, weight: selectedTab == tab ? .semibold : .regular))
-                    .foregroundStyle(selectedTab == tab ? AppTheme.tabGreen : Color(UIColor.secondaryLabel))
-                if let badge = badge {
-                    ZStack {
-                        Circle().fill(Color.red).frame(width: 18, height: 18)
-                        Text("\(badge)").font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .overlay(alignment: .bottom) {
-                if selectedTab == tab {
-                    Rectangle()
-                        .fill(AppTheme.tabGreen)
-                        .frame(height: 2)
-                        .clipShape(Capsule())
-                }
-            }
-        }
-    }
-
-    // MARK: - 친구 목록 탭
-
-    private var friendListTab: some View {
-        Group {
-            if friends.isEmpty {
-                emptyView(
-                    icon: "person.2",
-                    title: "아직 친구가 없어요",
-                    subtitle: "우측 상단 버튼으로 친구를 추가해보세요"
-                )
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(friends) { friend in
-                            friendRow(friend)
-                        }
-                    }
-                    .background(Color.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-                }
-            }
-        }
-    }
-
-    private func friendRow(_ friend: FriendResponse) -> some View {
-        HStack(spacing: 14) {
-            // 아바타
-            ZStack {
-                Circle()
-                    .fill(AppTheme.tabGreen.opacity(0.15))
-                    .frame(width: 44, height: 44)
-                Text(String(friend.nickname.prefix(1)))
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(AppTheme.tabGreen)
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(friend.nickname)
-                    .font(.system(size: 16, weight: .medium))
-                Text("친구 됨 · \(formattedDate(friend.friendSince))")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color(UIColor.tertiaryLabel))
-            }
-
-            Spacer()
-
-            // 운세 비교 버튼 (TODO: 궁합 화면 연결)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13))
-                .foregroundStyle(Color(UIColor.tertiaryLabel))
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .overlay(alignment: .bottom) {
-            if friend.id != friends.last?.id {
-                Divider().padding(.leading, 78)
-            }
-        }
-    }
-
-    // MARK: - 신청 관리 탭
-
-    private var requestsTab: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                if !pendingRequests.isEmpty {
-                    pendingRequestsSection
-                } else {
-                    emptyView(
-                        icon: "bell",
-                        title: "받은 신청이 없어요",
-                        subtitle: "친구 신청이 오면 여기에 표시됩니다"
-                    )
-                    .frame(height: 200)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-        }
-    }
-
-    private var pendingRequestsSection: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("받은 친구 신청")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color(UIColor.secondaryLabel))
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 10)
-
-            VStack(spacing: 0) {
-                ForEach(pendingRequests) { req in
-                    requestRow(req)
-                    if req.id != pendingRequests.last?.id {
-                        Divider().padding(.leading, 78)
-                    }
-                }
-            }
-            .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-        }
-    }
-
-    private func requestRow(_ req: FriendRequestResponse) -> some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(Color(UIColor.systemGray5))
-                    .frame(width: 44, height: 44)
-                Text(String(req.fromUserNickname.prefix(1)))
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color(UIColor.secondaryLabel))
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(req.fromUserNickname)
-                    .font(.system(size: 16, weight: .medium))
-                Text(formattedDate(req.createdAt))
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color(UIColor.tertiaryLabel))
-            }
-
-            Spacer()
-
-            HStack(spacing: 8) {
-                Button {
-                    respondToRequest(req.requestId, action: "REJECTED")
-                } label: {
-                    Text("거절")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Color(UIColor.secondaryLabel))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color(UIColor.systemGray5))
-                        .clipShape(Capsule())
-                }
-
-                Button {
-                    respondToRequest(req.requestId, action: "ACCEPTED")
-                } label: {
-                    Text("수락")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(AppTheme.tabGreen)
-                        .clipShape(Capsule())
-                }
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-    }
-
-    // MARK: - 빈 화면
-
-    private func emptyView(icon: String, title: String, subtitle: String) -> some View {
-        VStack(spacing: 12) {
-            Spacer()
-            Image(systemName: icon)
-                .font(.system(size: 40, weight: .light))
-                .foregroundStyle(Color(UIColor.systemGray4))
-            Text(title)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(Color(UIColor.secondaryLabel))
-            Text(subtitle)
-                .font(.system(size: 13))
-                .foregroundStyle(Color(UIColor.tertiaryLabel))
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    // MARK: - API
-
-    private func loadData() async {
+    private func fetchFriends() {
         guard let token = session.token else { return }
-        async let friendsResult = FriendAPI.fetchFriends(token: token)
-        async let requestsResult = FriendAPI.fetchPendingRequests(token: token)
-        friends = (try? await friendsResult) ?? []
-        pendingRequests = (try? await requestsResult) ?? []
-    }
-
-    private func sendFriendRequest(toUserId: Int) {
-        guard let token = session.token, !isLoadingAction else { return }
-        isLoadingAction = true
+        isLoading = true
         Task {
             do {
-                _ = try await FriendAPI.sendRequest(token: token, toUserId: toUserId)
-                await MainActor.run { alertMessage = "친구 신청을 보냈어요!" }
-            } catch {
-                await MainActor.run {
-                    alertMessage = (error as? APIError)?.errorDescription ?? "친구 신청에 실패했어요."
+                let response = try await APIClient.shared.request(
+                    path: "/api/v1/friends",
+                    token: token,
+                    responseType: FriendListResponse.self
+                )
+                DispatchQueue.main.async {
+                    self.friends = response.friends
+                    self.isLoading = false
                 }
+            } catch {
+                print("Failed to fetch friends: \(error)")
+                isLoading = false
             }
-            await MainActor.run { isLoadingAction = false }
         }
     }
 
-    private func respondToRequest(_ requestId: Int, action: String) {
-        guard let token = session.token, !isLoadingAction else { return }
-        isLoadingAction = true
+    private func nudge(friend: FriendResponse) {
+        guard let token = session.token else { return }
         Task {
             do {
-                _ = try await FriendAPI.respondRequest(token: token, requestId: requestId, action: action)
-                await MainActor.run {
-                    withAnimation { pendingRequests.removeAll { $0.requestId == requestId } }
-                    if action == "ACCEPTED" {
-                        alertMessage = "친구 요청을 수락했어요!"
-                        Task { await loadData() }
-                    }
-                }
+                let _ = try await APIClient.shared.request(
+                    path: "/api/v1/friends/nudge",
+                    method: "POST",
+                    token: token,
+                    body: JSONEncoder().encode(["toUserId": friend.friendUserId]),
+                    responseType: NudgeResponse.self
+                )
+                // 알림 등 처리
             } catch {
-                await MainActor.run {
-                    alertMessage = (error as? APIError)?.errorDescription ?? "처리에 실패했어요."
-                }
+                print("Nudge failed: \(error)")
             }
-            await MainActor.run { isLoadingAction = false }
         }
     }
-
-    // MARK: - Helpers
-
-    private func formattedDate(_ str: String) -> String {
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let iso2 = ISO8601DateFormatter()
-
-        let date = iso.date(from: str) ?? iso2.date(from: str)
-        guard let date else {
-            return String(str.prefix(10)).replacingOccurrences(of: "-", with: ".")
-        }
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "ko_KR")
-        f.dateFormat = "yyyy.MM.dd"
-        return f.string(from: date)
-    }
-
 }
 
-// MARK: - 친구 신청 시트
-
-struct SendFriendRequestSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Binding var targetId: String
-    let myUserId: Int?
-    let onSend: (Int) -> Void
+struct FriendFortuneView: View {
+    @EnvironmentObject private var session: SessionStore
+    let friend: FriendResponse
+    @State private var fortune: FortuneDetailResponse?
+    @State private var errorMessage: String?
 
     var body: some View {
-        VStack(spacing: 0) {
-            Capsule()
-                .fill(Color(UIColor.systemGray4))
-                .frame(width: 36, height: 4)
-                .padding(.top, 12)
-                .padding(.bottom, 24)
-
-            Text("친구 신청")
-                .font(.system(size: 20, weight: .bold))
-                .padding(.bottom, 6)
-
-            VStack(spacing: 4) {
-                Text("상대방의 유저 ID를 입력해 주세요")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color(UIColor.secondaryLabel))
-                if let myUserId {
-                    Text("내 유저 ID: \(myUserId)")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color(UIColor.tertiaryLabel))
-                }
-            }
-            .padding(.bottom, 28)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("유저 ID")
-                    .font(.system(size: 14, weight: .medium))
-                    .padding(.horizontal, 24)
-
-                HStack {
-                    TextField("숫자로 입력", text: $targetId)
-                        .keyboardType(.numberPad)
-                        .font(.system(size: 16))
-                    if !targetId.isEmpty {
-                        Button { targetId = "" } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(Color(UIColor.systemGray3))
-                        }
+        ScrollView {
+            VStack(spacing: 20) {
+                if let fortune = fortune {
+                    Text("\(friend.nickname)님의 오늘 운세")
+                        .font(.title2.bold())
+                    
+                    VStack(spacing: 12) {
+                        Text("\(fortune.totalScore)")
+                            .font(.system(size: 60, weight: .bold))
+                            .foregroundStyle(.orange)
+                        Text("총점")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
                     }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .background(Color(UIColor.systemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .padding(.horizontal, 24)
-            }
-
-            Spacer()
-
-            Button {
-                if let id = Int(targetId) {
-                    onSend(id)
-                }
-            } label: {
-                Text("신청하기")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 54)
-                    .background(Int(targetId) != nil ? AppTheme.tabGreen : Color(UIColor.systemGray4))
-                    .clipShape(Capsule())
+                    .padding(.vertical, 30)
+                    .background(Color(.systemGray6))
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+
+                    Text(fortune.summary)
+                        .font(.headline)
+                        .multilineTextAlignment(.center)
+                        .padding()
+
+                    Divider()
+
+                    Text(fortune.detailText)
+                        .font(.body)
+                        .padding()
+                } else if let error = errorMessage {
+                    VStack(spacing: 20) {
+                        Image(systemName: "hand.point.up.left.fill")
+                            .font(.system(size: 50))
+                            .foregroundStyle(.blue)
+                        Text(error)
+                            .font(.headline)
+                        Button("\(friend.nickname) 콕 찌르기") {
+                            nudge()
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .padding(.top, 100)
+                } else {
+                    ProgressView()
+                        .padding(.top, 100)
+                }
             }
-            .disabled(Int(targetId) == nil)
-            .padding(.horizontal, 24)
-            .padding(.bottom, 40)
+            .padding()
         }
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.hidden)
+        .navigationTitle(friend.nickname)
+        .onAppear { fetchFriendFortune() }
+    }
+
+    private func fetchFriendFortune() {
+        guard let token = session.token else { return }
+        Task {
+            do {
+                let response = try await APIClient.shared.request(
+                    path: "/api/v1/fortune/today/friend/\(friend.friendUserId)",
+                    token: token,
+                    responseType: FortuneDetailResponse.self
+                )
+                DispatchQueue.main.async {
+                    self.fortune = response
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.errorMessage = "\(friend.nickname)님이 아직 오늘 운세를 확인하지 않았습니다."
+                }
+            }
+        }
+    }
+
+    private func nudge() {
+        guard let token = session.token else { return }
+        Task {
+            do {
+                let _ = try await APIClient.shared.request(
+                    path: "/api/v1/friends/nudge",
+                    method: "POST",
+                    token: token,
+                    body: JSONEncoder().encode(["toUserId": friend.friendUserId]),
+                    responseType: NudgeResponse.self
+                )
+            } catch {
+                print("Nudge failed: \(error)")
+            }
+        }
     }
 }

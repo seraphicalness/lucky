@@ -3,6 +3,7 @@ package com.harugiwun.service;
 import com.harugiwun.domain.profile.AppUserProfile;
 import com.harugiwun.domain.profile.BirthCalendarType;
 import com.harugiwun.dto.SajuDtos;
+import com.harugiwun.service.fortune.TenGodCalculator;
 import com.nlf.calendar.EightChar;
 import com.nlf.calendar.Lunar;
 import com.nlf.calendar.Solar;
@@ -16,6 +17,12 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class SajuInfoService {
+
+    private final TenGodCalculator tenGodCalculator;
+
+    public SajuInfoService(TenGodCalculator tenGodCalculator) {
+        this.tenGodCalculator = tenGodCalculator;
+    }
 
     private static final Map<String, String> STEM_KOREAN = Map.of(
         "甲", "갑", "乙", "을", "丙", "병", "丁", "정", "戊", "무",
@@ -55,13 +62,13 @@ public class SajuInfoService {
         Lunar birthLunar = toLunar(calendarType, profile.getBirthDate(), birthTime, isLeapMonth);
         EightChar natal = birthLunar.getEightChar();
 
-        SajuDtos.PillarInfo yearPillar  = toPillarInfo(natal.getYear());
-        SajuDtos.PillarInfo monthPillar = toPillarInfo(natal.getMonth());
-        SajuDtos.PillarInfo dayPillar   = toPillarInfo(natal.getDay());
-        SajuDtos.PillarInfo timePillar  = hasExactTime ? toPillarInfo(natal.getTime()) : null;
-
         String dayStem   = natal.getDay().substring(0, 1);
         String dayBranch = natal.getDay().substring(1, 2);
+
+        SajuDtos.PillarInfo yearPillar  = toPillarInfo(natal.getYear(), dayStem);
+        SajuDtos.PillarInfo monthPillar = toPillarInfo(natal.getMonth(), dayStem);
+        SajuDtos.PillarInfo dayPillar   = toPillarInfo(natal.getDay(), dayStem);
+        SajuDtos.PillarInfo timePillar  = hasExactTime ? toPillarInfo(natal.getTime(), dayStem) : null;
 
         String dayMasterKorean  = STEM_KOREAN.getOrDefault(dayStem, dayStem);
         String dayMasterElement = STEM_ELEMENT.getOrDefault(dayStem, "목");
@@ -87,7 +94,7 @@ public class SajuInfoService {
         return Solar.fromYmdHms(date.getYear(), date.getMonthValue(), date.getDayOfMonth(), h, m, s).getLunar();
     }
 
-    private SajuDtos.PillarInfo toPillarInfo(String pillar) {
+    private SajuDtos.PillarInfo toPillarInfo(String pillar, String dayMasterStem) {
         if (pillar == null || pillar.length() < 2) return null;
         String stem   = pillar.substring(0, 1);
         String branch = pillar.substring(1, 2);
@@ -96,7 +103,8 @@ public class SajuInfoService {
             STEM_KOREAN.getOrDefault(stem, stem),
             BRANCH_KOREAN.getOrDefault(branch, branch),
             STEM_ELEMENT.getOrDefault(stem, "목"),
-            BRANCH_ELEMENT.getOrDefault(branch, "토")
+            BRANCH_ELEMENT.getOrDefault(branch, "토"),
+            tenGodCalculator.calculate(dayMasterStem, stem)
         );
     }
 
