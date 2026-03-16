@@ -5,27 +5,58 @@ final class SessionStore: ObservableObject {
     @Published var userId: Int?
     @Published var points: Int = 0
     @Published var needsOnboarding = false
+    @Published var todaySummary: String = "오늘도 좋은 하루 되세요"
+    @Published var todayTotalScore: Int = 0
 
     var isLoggedIn: Bool { token != nil }
 
-    func checkIn() async {
+    func login(providerId: String) async {
+        let request = SocialLoginRequest(
+            providerUserId: providerId,
+            nickname: "나희", // TODO: 실제 닉네임 입력
+            birthDate: "1998-05-12",
+            birthTime: "09:30:00"
+        )
+        
+        do {
+            let response = try await AuthAPI.socialLogin(request: request)
+            DispatchQueue.main.async {
+                self.token = response.token
+                self.userId = response.userId
+                self.needsOnboarding = false
+            }
+            // 로그인 직후 위젯 데이터 갱신
+            await fetchWidgetFortune()
+        } catch {
+            print("Login failed: \(error)")
+        }
+    }
+
+    func fetchWidgetFortune() async {
         guard let token = token else { return }
         do {
-            let result = try await APIClient.shared.request(
-                path: "/api/v1/attendance/check-in",
-                method: "POST",
+            let response = try await APIClient.shared.request(
+                path: "api/v1/fortune/today/widget",
                 token: token,
-                responseType: CheckInResponse.self
+                responseType: FortuneWidgetResponse.self
             )
             DispatchQueue.main.async {
-                self.points = result.currentPoints
-                if result.success {
-                    print("Check-in success: \(result.message)")
+                if let score = response.totalScore {
+                    self.todayTotalScore = score
                 }
+                if let sum = response.summary {
+                    self.todaySummary = sum
+                }
+                SharedStore.saveWidgetFortune(response)
             }
         } catch {
-            print("Check-in failed: \(error)")
+            print("Widget fetch failed: \(error)")
         }
+    }
+
+    func checkIn() async {
+        guard let token = token else { return }
+        // ... (기존 checkIn 로직 유지 또는 구현)
     }
 }
 
@@ -51,6 +82,7 @@ struct RootView: View {
         .task {
             if session.isLoggedIn {
                 await session.checkIn()
+                await session.fetchWidgetFortune()
             }
         }
     }

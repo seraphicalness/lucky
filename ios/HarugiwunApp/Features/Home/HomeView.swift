@@ -2,8 +2,6 @@ import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject private var session: SessionStore
-    @State private var totalScore: Int = 78
-    @State private var summary: String = "좋은 하루 보내시고 행운 가득한 하루 되세요."
 
     var body: some View {
         ScrollView {
@@ -26,7 +24,7 @@ struct HomeView: View {
                 }
 
                 VStack(spacing: 12) {
-                    Text("\(totalScore)")
+                    Text("\(session.todayTotalScore)")
                         .font(.system(size: 48, weight: .bold))
                         .foregroundStyle(AppTheme.tabGreen)
                     Text("총점")
@@ -38,12 +36,15 @@ struct HomeView: View {
                 .background(Color(.systemGray6))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
 
-                Text(summary)
+                Text(session.todaySummary)
                     .font(.body)
                     .foregroundStyle(.primary)
             }
             .padding()
         }
         .navigationTitle("홈")
+        .task {
+            await session.fetchWidgetFortune()
+        }
     }
 }
