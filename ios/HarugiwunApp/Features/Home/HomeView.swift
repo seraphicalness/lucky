@@ -32,14 +32,41 @@ struct HomeView: View {
                 } else {
                     fortuneCard
                 }
+                
+                // 광고 버튼 추가
+                adRewardButton
+                
                 widgetButton
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 32)
         }
         .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
-        .toolbar(.hidden, for: .navigationBar)
-        .task { await loadFortune() }
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                NavigationLink(destination: StoreView()) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "p.circle.fill")
+                            .foregroundStyle(.yellow)
+                        Text("\(session.points) P")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Color(UIColor.label))
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color(UIColor.tertiaryLabel))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.white)
+                    .clipShape(Capsule())
+                    .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+                }
+            }
+        }
+        .task { 
+            await loadFortune()
+            await session.fetchBalance()
+        }
         .sheet(isPresented: $showWidgetGuide) {
             WidgetGuideSheet()
         }
@@ -167,6 +194,35 @@ struct HomeView: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - 광고 보상 버튼
+
+    private var adRewardButton: some View {
+        Button {
+            Task {
+                await session.claimAdReward()
+            }
+        } label: {
+            HStack {
+                Image(systemName: "play.rectangle.fill")
+                    .font(.system(size: 15))
+                Text("광고 보고 100P 받기")
+                    .font(.system(size: 15, weight: .medium))
+                Spacer()
+                Text("오늘 \(session.dailyAdCount)/5")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color(UIColor.tertiaryLabel))
+            }
+            .foregroundStyle(session.dailyAdCount >= 5 ? Color(UIColor.tertiaryLabel) : AppTheme.tabGreen)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        }
+        .disabled(session.dailyAdCount >= 5)
+        .padding(.top, 14)
     }
 
     // MARK: - 위젯 편집 버튼

@@ -100,12 +100,5 @@ final class APIClient {
             print("❌ API [\(response.statusCode)] \(response.url?.path ?? ""): \(msg)")
             throw APIError.httpError(response.statusCode, msg)
         }
-        
-        let decoder = JSONDecoder()
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        decoder.dateDecodingStrategy = .formatted(formatter)
-        
-        return try decoder.decode(T.self, from: data)
     }
 }

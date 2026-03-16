@@ -22,8 +22,6 @@ struct LoginView: View {
     }
 
     private func mockAppleLogin() {
-        Task {
-            await session.login(providerId: "apple-user-1234")
-        }
+        session.startOnboarding(providerId: "apple-user-1234")
     }
 }
