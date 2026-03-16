@@ -35,6 +35,11 @@ final class APIClient {
             throw URLError(.badServerResponse)
         }
         
-        return try JSONDecoder().decode(T.self, from: data)
+        let decoder = JSONDecoder()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        decoder.dateDecodingStrategy = .formatted(formatter)
+        
+        return try decoder.decode(T.self, from: data)
     }
 }
