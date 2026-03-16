@@ -11,6 +11,8 @@ struct ProfileView: View {
     @State private var errorMessage: String? = nil
     @State private var showEditProfile = false
 
+    @State private var showContactSheet = false
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -34,6 +36,20 @@ struct ProfileView: View {
         .toolbar(.hidden, for: .navigationBar)
         .task { await loadData() }
         .overlay { if isLoading { ProgressView() } }
+        .confirmationDialog("개발자에게 문의하기", isPresented: $showContactSheet, titleVisibility: .visible) {
+            Button("이메일로 문의하기") {
+                let email = "support@harugiwun.com"
+                if let url = URL(string: "mailto:\(email)") {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("개발자에게 커피 사주기 ☕️") {
+                if let url = URL(string: "https://toss.me/harugiwun") {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("취소", role: .cancel) { }
+        }
         .alert("오류", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("확인") {}
         } message: {
@@ -177,18 +193,7 @@ struct ProfileView: View {
             }
             menuDivider
             menuRow(icon: "questionmark.circle", label: "개발자에게 문의하기") {
-                let email = "support@harugiwun.com"
-                if let url = URL(string: "mailto:\(email)") {
-                    UIApplication.shared.open(url)
-                }
-            }
-            menuDivider
-            menuRow(icon: "cup.and.saucer", label: "개발자에게 커피 사주기") {
-                // TODO: 실제 결제 연동 (App Store IAP 등)
-                // 임시로 토스나 카카오페이 등 결제 링크가 있다면 연결 가능
-                if let url = URL(string: "https://toss.me/harugiwun") {
-                    UIApplication.shared.open(url)
-                }
+                showContactSheet = true
             }
         }
         .background(Color.white)
