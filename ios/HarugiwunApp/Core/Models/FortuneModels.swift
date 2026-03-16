@@ -1,15 +1,17 @@
 ﻿import Foundation
 
 struct FortuneWidgetResponse: Codable {
-    let date: String
-    let totalScore: Int
-    let luckyColor: String
-    let luckyNumber: Int
-    let summary: String
+    let date: Date
+    let pending: Bool
+    let pendingMessage: String?
+    let totalScore: Int?
+    let luckyColor: String?
+    let luckyNumber: Int?
+    let summary: String?
 }
 
 struct FortuneDetailResponse: Codable {
-    let date: String
+    let date: Date
     let totalScore: Int
     let moneyScore: Int
     let loveScore: Int
