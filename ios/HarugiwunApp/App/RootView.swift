@@ -4,32 +4,67 @@ final class SessionStore: ObservableObject {
     @Published var token: String?
     @Published var userId: Int?
     @Published var points: Int = 0
+    @Published var dailyAdCount: Int = 0
     @Published var needsOnboarding = false
     @Published var todaySummary: String = "오늘도 좋은 하루 되세요"
     @Published var todayTotalScore: Int = 0
 
+    /// 온보딩 완료 전까지 임시 보관하는 Apple Provider ID
+    var mockProviderUserId: String = ""
+
     var isLoggedIn: Bool { token != nil }
 
-    func login(providerId: String) async {
-        let request = SocialLoginRequest(
-            providerUserId: providerId,
-            nickname: "나희", // TODO: 실제 닉네임 입력
-            birthDate: "1998-05-12",
-            birthTime: "09:30:00"
-        )
-        
+    func fetchBalance() async {
+        guard let token = token else { return }
         do {
-            let response = try await AuthAPI.socialLogin(request: request)
+            let response = try await PointAPI.fetchBalance(token: token)
             DispatchQueue.main.async {
-                self.token = response.token
-                self.userId = response.userId
-                self.needsOnboarding = false
+                self.points = response.currentPoints
+                self.dailyAdCount = response.dailyAdCount
             }
-            // 로그인 직후 위젯 데이터 갱신
-            await fetchWidgetFortune()
         } catch {
-            print("Login failed: \(error)")
+            print("Balance fetch failed: \(error)")
         }
+    }
+
+    func claimAdReward() async {
+        guard let token = token else { return }
+        do {
+            let response = try await PointAPI.claimAdReward(token: token)
+            DispatchQueue.main.async {
+                self.points = response.currentPoints
+                self.dailyAdCount = response.dailyAdCount
+            }
+        } catch {
+            print("Ad reward failed: \(error)")
+        }
+    }
+
+    func purchasePoints(productId: String, amount: Int) async {
+        guard let token = token else { return }
+        do {
+            let response = try await PointAPI.purchasePoints(token: token, productId: productId, amount: amount)
+            DispatchQueue.main.async {
+                self.points = response.currentPoints
+                self.dailyAdCount = response.dailyAdCount
+            }
+        } catch {
+            print("Purchase failed: \(error)")
+        }
+    }
+
+    /// 애플 로그인 성공 후 호출 — providerUserId를 보관하고 온보딩 화면으로 이동
+    func startOnboarding(providerId: String) {
+        mockProviderUserId = providerId
+        needsOnboarding = true
+    }
+
+    /// 온보딩 완료 후 OnboardingView에서 호출 — 토큰을 저장하고 메인 탭으로 이동
+    func login(token: String, userId: Int) {
+        self.token = token
+        self.userId = userId
+        self.needsOnboarding = false
+        Task { await fetchWidgetFortune() }
     }
 
     func fetchWidgetFortune() async {
