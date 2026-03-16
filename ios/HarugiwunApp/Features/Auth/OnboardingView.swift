@@ -20,11 +20,15 @@ struct OnboardingView: View {
     @State private var birthDate: Date? = nil
     @State private var showBirthDatePicker = false
     @State private var birthHour: Int? = nil
+    @State private var birthMinute: Int? = nil
     @State private var showBirthHourPicker = false
     @State private var unknownBirthTime = false
 
     // Step 3
     @State private var gender: OnboardingGender? = nil
+
+    @State private var isLoading = false
+    @State private var errorMessage: String? = nil
 
     var body: some View {
         ZStack {
@@ -53,10 +57,14 @@ struct OnboardingView: View {
             )
         }
         .sheet(isPresented: $showBirthHourPicker) {
-            BirthHourPickerSheet(
-                selection: Binding(
+            BirthTimePickerSheet(
+                hour: Binding(
                     get: { birthHour ?? 0 },
                     set: { birthHour = $0 }
+                ),
+                minute: Binding(
+                    get: { birthMinute ?? 0 },
+                    set: { birthMinute = $0 }
                 ),
                 onConfirm: { showBirthHourPicker = false }
             )
@@ -152,15 +160,19 @@ struct OnboardingView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
-                    underlineField(label: "태어난 시") {
+                    underlineField(label: "태어난 시각") {
                         Button {
                             guard !unknownBirthTime else { return }
                             showBirthHourPicker = true
                         } label: {
-                            Text(birthHour.map { "\($0)시" } ?? "태어난 시를 선택해 주세요.")
+                            Text(
+                                birthHour != nil && birthMinute != nil
+                                ? String(format: "%d시 %02d분", birthHour ?? 0, birthMinute ?? 0)
+                                : "태어난 시와 분을 선택해 주세요."
+                            )
                                 .font(.system(size: 16))
                                 .foregroundStyle(
-                                    (unknownBirthTime || birthHour == nil)
+                                    (unknownBirthTime || birthHour == nil || birthMinute == nil)
                                         ? Color(UIColor.placeholderText) : .primary
                                 )
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -171,7 +183,10 @@ struct OnboardingView: View {
 
                     Button {
                         unknownBirthTime.toggle()
-                        if unknownBirthTime { birthHour = nil }
+                        if unknownBirthTime {
+                            birthHour = nil
+                            birthMinute = nil
+                        }
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: unknownBirthTime ? "checkmark.square.fill" : "checkmark.square")
@@ -190,7 +205,7 @@ struct OnboardingView: View {
 
             nextButton(
                 title: "다음",
-                enabled: birthDate != nil && (unknownBirthTime || birthHour != nil)
+                enabled: birthDate != nil && (unknownBirthTime || (birthHour != nil && birthMinute != nil))
             ) {
                 withAnimation(.easeInOut(duration: 0.2)) { step = 3 }
             }
@@ -264,17 +279,28 @@ struct OnboardingView: View {
     @ViewBuilder
     private func nextButton(title: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 54)
-                .background(enabled ? AppTheme.tabGreen : Color(UIColor.systemGray4))
-                .clipShape(Capsule())
+            Group {
+                if isLoading {
+                    ProgressView().tint(.white)
+                } else {
+                    Text(title)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 54)
+            .background(enabled ? AppTheme.tabGreen : Color(UIColor.systemGray4))
+            .clipShape(Capsule())
         }
-        .disabled(!enabled)
+        .disabled(!enabled || isLoading)
         .padding(.horizontal, 24)
         .padding(.bottom, 44)
+        .alert("오류", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+            Button("확인") { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 
     // MARK: - Helpers
@@ -291,32 +317,53 @@ struct OnboardingView: View {
         return "\(y)년 \(m)월 \(d)일"
     }
 
+    private func apiDateString(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: date)
+    }
+
+    private func apiTimeString(hour: Int, minute: Int) -> String {
+        String(format: "%02d:%02d:00", hour, minute)
+    }
+
     private func completeOnboarding() {
-        // TODO: Call AuthAPI.socialLogin(...)
-        /*
+        guard !isLoading else { return }
+        isLoading = true
+        errorMessage = nil
+
         Task {
             do {
+                let birthTimeString: String? = {
+                    guard !unknownBirthTime, let h = birthHour, let m = birthMinute else { return nil }
+                    return apiTimeString(hour: h, minute: m)
+                }()
+
                 let req = SocialLoginRequest(
-                    providerUserId: "test-user-id", // Real ID from Apple Auth
-                    nickname: name,
-                    birthDate: birthDate,
-                    ...
+                    providerUserId: session.mockProviderUserId,
+                    nickname: name.isEmpty ? nil : name,
+                    birthDate: birthDate.map { apiDateString($0) },
+                    birthTime: birthTimeString,
+                    birthCalendarType: "SOLAR",
+                    birthIsLeapMonth: false,
+                    gender: gender == .female ? "FEMALE" : gender == .male ? "MALE" : nil
                 )
-                let res = try await AuthAPI.login(req)
-                session.token = res.token
-                session.userId = res.userId
-                session.needsOnboarding = false
+                let res = try await APIClient.shared.request(
+                    path: "/api/v1/auth/social/login",
+                    method: "POST",
+                    body: req,
+                    responseType: SocialLoginResponse.self
+                )
+                await MainActor.run {
+                    session.login(token: res.token, userId: res.userId)
+                }
             } catch {
-                print("Login failed: \(error)")
+                await MainActor.run {
+                    errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+                    isLoading = false
+                }
             }
         }
-        */
-        
-        // Temporary Mock for Testing
-        print("Mock Login with: Name=\(name), Birth=\(String(describing: birthDate)), Gender=\(String(describing: gender))")
-        session.token = "mock-token-for-testing"
-        session.userId = 1
-        session.needsOnboarding = false
     }
 }
 
@@ -356,16 +403,24 @@ private struct BirthDatePickerSheet: View {
     }
 }
 
-private struct BirthHourPickerSheet: View {
-    @Binding var selection: Int
+private struct BirthTimePickerSheet: View {
+    @Binding var hour: Int
+    @Binding var minute: Int
     let onConfirm: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             Spacer().frame(height: 8)
-            Picker("시간", selection: $selection) {
-                ForEach(0..<24, id: \.self) { h in
-                    Text("\(h)시").tag(h)
+            HStack {
+                Picker("시", selection: $hour) {
+                    ForEach(0..<24, id: \.self) { h in
+                        Text("\(h)시").tag(h)
+                    }
+                }
+                Picker("분", selection: $minute) {
+                    ForEach(0..<60, id: \.self) { m in
+                        Text(String(format: "%02d분", m)).tag(m)
+                    }
                 }
             }
             .pickerStyle(.wheel)

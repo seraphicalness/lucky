@@ -25,3 +25,5 @@ server/build/
 
 # 로컬 설정 
 server/src/main/resources/application-local.yml
+server/src/main/resources/application.yml
+

@@ -1,4 +1,4 @@
-﻿import Foundation
+import Foundation
 
 struct FortuneWidgetResponse: Codable {
     let date: Date

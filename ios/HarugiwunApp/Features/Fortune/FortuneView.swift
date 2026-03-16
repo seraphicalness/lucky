@@ -59,9 +59,106 @@ struct FortuneView: View {
     private func categoryRow(_ title: String, _ score: Int?) -> some View {
         HStack {
             Text(title)
-            Spacer()
-            Text("\(score ?? 0)")
-                .bold()
+                .font(.system(size: 15))
+                .frame(width: 56, alignment: .leading)
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color(UIColor.systemGray5))
+                        .frame(height: 8)
+                    Capsule()
+                        .fill(scoreColor(score))
+                        .frame(width: geo.size.width * CGFloat(score) / 100, height: 8)
+                }
+            }
+            .frame(height: 8)
+
+            Text("\(score)")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(scoreColor(score))
+                .frame(width: 32, alignment: .trailing)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+    }
+
+    // MARK: - 상세 카드
+
+    private var detailCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("오늘의 상세 운세", systemImage: "doc.text")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color(UIColor.secondaryLabel))
+
+            Text(fortune?.detailText ?? "")
+                .font(.system(size: 15))
+                .foregroundStyle(Color(UIColor.label))
+                .lineSpacing(5)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+    }
+
+    // MARK: - 행운 배지
+
+    private func luckyBadge(icon: String? = nil, color: Color? = nil, label: String, value: String) -> some View {
+        HStack(spacing: 6) {
+            if let icon = icon {
+                Image(systemName: icon)
+                    .font(.system(size: 11))
+                    .foregroundStyle(AppTheme.tabGreen)
+            }
+            if let color = color {
+                Circle().fill(color).frame(width: 10, height: 10)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label)
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color(UIColor.tertiaryLabel))
+                Text(value)
+                    .font(.system(size: 13, weight: .semibold))
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color(UIColor.systemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    // MARK: - API
+
+    private func loadFortune() async {
+        guard let token = session.token else { return }
+        isLoading = true
+        do {
+            fortune = try await FortuneAPI.fetchToday(token: token)
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+        isLoading = false
+    }
+
+    // MARK: - Helpers
+
+    private func scoreColor(_ score: Int) -> Color {
+        if score >= 80 { return AppTheme.tabGreen }
+        if score >= 60 { return Color(red: 0.95, green: 0.66, blue: 0.18) }
+        return Color(red: 0.92, green: 0.35, blue: 0.35)
+    }
+
+    private func luckyColorValue(_ name: String?) -> Color {
+        switch name {
+        case "빨강", "Red":    return .red
+        case "파랑", "Blue":   return .blue
+        case "초록", "Green":  return AppTheme.tabGreen
+        case "노랑", "Yellow": return .yellow
+        case "보라", "Purple": return .purple
+        case "주황", "Orange": return .orange
+        default:               return .blue
         }
     }
 }

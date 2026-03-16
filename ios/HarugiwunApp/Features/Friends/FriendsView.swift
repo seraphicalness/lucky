@@ -59,6 +59,7 @@ struct FriendsView: View {
                 }
             }
         }
+        .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle("친구")
         .onAppear { fetchFriends() }
         .refreshable { fetchFriends() }

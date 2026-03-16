@@ -1,6 +1,20 @@
 import SwiftUI
 import WidgetKit
 
+// MARK: - Shared 모델 (위젯용 요약 운세)
+
+private struct WidgetFortune: Codable {
+    let date: String
+    let pending: Bool
+    let pendingMessage: String?
+    let totalScore: Int?
+    let luckyColor: String?
+    let luckyNumber: Int?
+    let summary: String?
+}
+
+// MARK: - Entry
+
 struct HarugiwunEntry: TimelineEntry {
     let date: Date
     let totalScore: Int
@@ -11,7 +25,11 @@ struct HarugiwunEntry: TimelineEntry {
     let pendingMessage: String?
 }
 
+// MARK: - Provider
+
 struct HarugiwunProvider: TimelineProvider {
+    private let appGroupID = "group.com.example.harugiwun"
+
     func placeholder(in context: Context) -> HarugiwunEntry {
         HarugiwunEntry(
             date: Date(),
@@ -72,7 +90,27 @@ struct HarugiwunProvider: TimelineProvider {
         let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
         completion(timeline)
     }
+
+    private func loadFromShared() -> HarugiwunEntry? {
+        guard
+            let defaults = UserDefaults(suiteName: appGroupID),
+            let data = defaults.data(forKey: "widget_fortune"),
+            let fortune = try? JSONDecoder().decode(WidgetFortune.self, from: data)
+        else {
+            return nil
+        }
+
+        return HarugiwunEntry(
+            date: Date(),
+            totalScore: fortune.totalScore ?? 0,
+            luckyColorName: fortune.luckyColor ?? "-",
+            luckyNumber: fortune.luckyNumber ?? 0,
+            summary: fortune.summary ?? "오늘의 운세를 불러오는 중이에요."
+        )
+    }
 }
+
+// MARK: - View
 
 struct HarugiwunWidgetView: View {
     var entry: HarugiwunProvider.Entry
@@ -145,6 +183,8 @@ struct HarugiwunWidgetView: View {
         return .red
     }
 }
+
+// MARK: - Widget
 
 struct HarugiwunWidget: Widget {
     let kind: String = "HarugiwunWidget"
