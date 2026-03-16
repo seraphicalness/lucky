@@ -451,14 +451,14 @@ public class SajuFortuneCalculator {
 
     private String stemOf(String pillar) {
         if (pillar == null || pillar.length() < 1) {
-            return "甲"; // Fallback to avoid crash
+            return "甲"; // Fallback
         }
         return pillar.substring(0, 1);
     }
 
     private String branchOf(String pillar) {
         if (pillar == null || pillar.length() < 2) {
-            return "子"; // Fallback to avoid crash
+            return "子"; // Fallback
         }
         return pillar.substring(1, 2);
     }
