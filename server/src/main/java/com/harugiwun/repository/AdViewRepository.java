@@ -9,4 +9,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface AdViewRepository extends JpaRepository<AdView, Long> {
     long countByUserIdAndFeatureAndViewedAtBetween(Long userId, AdFeature feature, LocalDateTime start, LocalDateTime end);
+
+    java.util.Optional<AdView> findTopByUserIdAndFeatureAndViewedAtAfterOrderByViewedAtDesc(Long userId, AdFeature feature, LocalDateTime threshold);
 }
