@@ -1,10 +1,12 @@
 import SwiftUI
+import Foundation
 import WidgetKit
 
 struct HomeView: View {
     @EnvironmentObject private var session: SessionStore
 
     @State private var fortune: FortuneDetailResponse? = nil
+    @State private var tarotCard: TarotCardResponse? = nil
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var showWidgetGuide = false
@@ -32,10 +34,9 @@ struct HomeView: View {
                 } else {
                     fortuneCard
                 }
-                
-                // 광고 버튼 추가
-                adRewardButton
-                
+
+                tarotCardView
+
                 widgetButton
             }
             .padding(.horizontal, 20)
@@ -46,14 +47,12 @@ struct HomeView: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 NavigationLink(destination: StoreView()) {
                     HStack(spacing: 4) {
-                        Image(systemName: "p.circle.fill")
-                            .foregroundStyle(.yellow)
-                        Text("\(session.points) P")
-                            .font(.system(size: 14, weight: .bold))
+                        Image(systemName: "bag.fill")
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(Color(UIColor.label))
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Color(UIColor.tertiaryLabel))
+                        Text("상점")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color(UIColor.label))
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -80,48 +79,60 @@ struct HomeView: View {
     // MARK: - 마스코트 섹션
 
     private var mascotSection: some View {
-        VStack(spacing: 8) {
-            Text(todayString())
-                .font(.system(size: 13))
-                .foregroundStyle(Color(UIColor.secondaryLabel))
-                .padding(.top, 24)
-
-            Image("Mascot")
-                .resizable()
-                .scaledToFit()
-                .frame(height: 180)
-
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    guard !mascotMessages.isEmpty else { return }
-                    var next = Int.random(in: 0..<mascotMessages.count)
-                    if next == messageIndex && mascotMessages.count > 1 {
-                        next = (next + 1) % mascotMessages.count
-                    }
-                    messageIndex = next
-                }
-            } label: {
-                VStack(spacing: 0) {
-                    BubbleTail()
-                        .fill(Color.white)
-                        .frame(width: 18, height: 9)
-                        .offset(y: 4)
-
-                    Text(mascotMessages[messageIndex])
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(Color(UIColor.secondaryLabel))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 18)
-                                .fill(Color.white)
-                                .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 2)
-                        )
-                }
+        ZStack(alignment: .topLeading) {
+            // 캐릭터: 우측 상단 배치
+            HStack {
+                Spacer()
+                Image("Mascot")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 170)
+                    .padding(.top, 6)
             }
-            .buttonStyle(.plain)
-            .padding(.bottom, 16)
+
+            // 날짜 + 말풍선: 좌측 상단 배치
+            VStack(alignment: .leading, spacing: 10) {
+                Text(todayString())
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color(UIColor.secondaryLabel))
+                    .padding(.top, 24)
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        guard !mascotMessages.isEmpty else { return }
+                        var next = Int.random(in: 0..<mascotMessages.count)
+                        if next == messageIndex && mascotMessages.count > 1 {
+                            next = (next + 1) % mascotMessages.count
+                        }
+                        messageIndex = next
+                    }
+                } label: {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(mascotMessages[messageIndex])
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Color(UIColor.secondaryLabel))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 18)
+                                    .fill(Color.white)
+                                    .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 2)
+                            )
+                            .overlay(alignment: .topLeading) {
+                                BubbleTail()
+                                    .fill(Color.white)
+                                    .frame(width: 18, height: 9)
+                                    .rotationEffect(.degrees(180))
+                                    .offset(x: 22, y: 34)
+                            }
+                    }
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: 240, alignment: .leading)
+            }
         }
+        .frame(maxWidth: .infinity, minHeight: 220, alignment: .topLeading)
+        .padding(.bottom, 10)
     }
 
     // MARK: - 운세 카드
@@ -182,6 +193,95 @@ struct HomeView: View {
         .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
     }
 
+    // MARK: - 오늘의 타로 카드
+
+    private var tarotCardView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppTheme.tabGreen)
+                Text("오늘의 타로 카드")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color(UIColor.secondaryLabel))
+                Spacer()
+            }
+
+            if let tarotCard {
+                HStack(alignment: .top, spacing: 14) {
+                    tarotImage(imageUrl: tarotCard.imageUrl)
+                        .frame(width: 92, height: 120)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(tarotCard.name)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color(UIColor.label))
+
+                        Text(tarotCard.meaning)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color(UIColor.secondaryLabel))
+
+                        Text(tarotCard.description)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color(UIColor.label))
+                            .lineSpacing(4)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    Rectangle()
+                        .fill(Color(UIColor.systemGray5))
+                        .frame(width: 92, height: 120)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                    Text("타로 카드를 불러오는 중입니다.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color(UIColor.tertiaryLabel))
+                }
+            }
+        }
+        .padding(16)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        .padding(.top, 14)
+    }
+
+    @ViewBuilder
+    private func tarotImage(imageUrl: String) -> some View {
+        let fullURL = URL(string: imageUrl, relativeTo: APIClient.shared.baseURL)?.absoluteURL
+
+        if let fullURL {
+            AsyncImage(url: fullURL) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                case .failure(_):
+                    placeholderTarotImage
+                case .empty:
+                    placeholderTarotImage
+                @unknown default:
+                    placeholderTarotImage
+                }
+            }
+        } else {
+            placeholderTarotImage
+        }
+    }
+
+    private var placeholderTarotImage: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(UIColor.systemGray5))
+            Image(systemName: "moon.stars")
+                .font(.system(size: 22))
+                .foregroundStyle(Color(UIColor.tertiaryLabel))
+        }
+    }
+
     private func luckyItem<Icon: View>(title: String, value: String, icon: Icon) -> some View {
         HStack(spacing: 6) {
             icon
@@ -194,35 +294,6 @@ struct HomeView: View {
             }
         }
         .frame(maxWidth: .infinity)
-    }
-
-    // MARK: - 광고 보상 버튼
-
-    private var adRewardButton: some View {
-        Button {
-            Task {
-                await session.claimAdReward()
-            }
-        } label: {
-            HStack {
-                Image(systemName: "play.rectangle.fill")
-                    .font(.system(size: 15))
-                Text("광고 보고 100P 받기")
-                    .font(.system(size: 15, weight: .medium))
-                Spacer()
-                Text("오늘 \(session.dailyAdCount)/5")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color(UIColor.tertiaryLabel))
-            }
-            .foregroundStyle(session.dailyAdCount >= 5 ? Color(UIColor.tertiaryLabel) : AppTheme.tabGreen)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
-        }
-        .disabled(session.dailyAdCount >= 5)
-        .padding(.top, 14)
     }
 
     // MARK: - 위젯 편집 버튼
@@ -264,6 +335,9 @@ struct HomeView: View {
             let widgetFortune = try await FortuneAPI.fetchWidget(token: token)
             SharedStore.saveWidgetFortune(widgetFortune)
             WidgetCenter.shared.reloadAllTimelines()
+
+            // 오늘의 타로 카드 (운세 카드와 별개로, 실패해도 홈은 유지)
+            tarotCard = try? await FortuneAPI.fetchTodayTarot(token: token)
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
@@ -310,6 +384,27 @@ private struct BubbleTail: Shape {
         p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
         p.closeSubpath()
         return p
+    }
+}
+
+// MARK: - 포인트 상점 (임시)
+
+private struct StoreView: View {
+    @EnvironmentObject private var session: SessionStore
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("포인트 상점")
+                .font(.title2.bold())
+
+            Text("현재 \(session.points)P")
+                .foregroundStyle(.secondary)
+
+            Text("준비중이에요.")
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
     }
 }
 

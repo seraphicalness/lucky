@@ -42,22 +42,9 @@ struct FortuneView: View {
         }
     }
 
-    private func loadFortune() async {
-        guard let token = session.token else { return }
-        isLoading = true
-        errorMessage = nil
-        
-        do {
-            fortune = try await FortuneAPI.fetchToday(token: token)
-        } catch {
-            errorMessage = "운세를 불러오지 못했습니다."
-            print("Fortune fetch error: \(error)")
-        }
-        isLoading = false
-    }
-
     private func categoryRow(_ title: String, _ score: Int?) -> some View {
-        HStack {
+        let scoreValue = score ?? 0
+        return HStack {
             Text(title)
                 .font(.system(size: 15))
                 .frame(width: 56, alignment: .leading)
@@ -68,15 +55,15 @@ struct FortuneView: View {
                         .fill(Color(UIColor.systemGray5))
                         .frame(height: 8)
                     Capsule()
-                        .fill(scoreColor(score))
-                        .frame(width: geo.size.width * CGFloat(score) / 100, height: 8)
+                        .fill(scoreColor(scoreValue))
+                        .frame(width: geo.size.width * CGFloat(scoreValue) / 100, height: 8)
                 }
             }
             .frame(height: 8)
 
-            Text("\(score)")
+            Text("\(scoreValue)")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(scoreColor(score))
+                .foregroundStyle(scoreColor(scoreValue))
                 .frame(width: 32, alignment: .trailing)
         }
         .padding(.horizontal, 20)

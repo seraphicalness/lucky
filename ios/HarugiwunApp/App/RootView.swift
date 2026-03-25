@@ -18,7 +18,7 @@ final class SessionStore: ObservableObject {
         guard let token = token else { return }
         do {
             let response = try await PointAPI.fetchBalance(token: token)
-            DispatchQueue.main.async {
+            await MainActor.run {
                 self.points = response.currentPoints
                 self.dailyAdCount = response.dailyAdCount
             }
@@ -31,7 +31,7 @@ final class SessionStore: ObservableObject {
         guard let token = token else { return }
         do {
             let response = try await PointAPI.claimAdReward(token: token)
-            DispatchQueue.main.async {
+            await MainActor.run {
                 self.points = response.currentPoints
                 self.dailyAdCount = response.dailyAdCount
             }
@@ -44,7 +44,7 @@ final class SessionStore: ObservableObject {
         guard let token = token else { return }
         do {
             let response = try await PointAPI.purchasePoints(token: token, productId: productId, amount: amount)
-            DispatchQueue.main.async {
+            await MainActor.run {
                 self.points = response.currentPoints
                 self.dailyAdCount = response.dailyAdCount
             }
@@ -67,15 +67,21 @@ final class SessionStore: ObservableObject {
         Task { await fetchWidgetFortune() }
     }
 
+    func logout() {
+        token = nil
+        userId = nil
+        needsOnboarding = false
+    }
+
     func fetchWidgetFortune() async {
         guard let token = token else { return }
         do {
             let response = try await APIClient.shared.request(
-                path: "api/v1/fortune/today/widget",
+                path: "/api/v1/fortune/today/widget",
                 token: token,
                 responseType: FortuneWidgetResponse.self
             )
-            DispatchQueue.main.async {
+            await MainActor.run {
                 if let score = response.totalScore {
                     self.todayTotalScore = score
                 }
@@ -91,7 +97,22 @@ final class SessionStore: ObservableObject {
 
     func checkIn() async {
         guard let token = token else { return }
-        // ... (기존 checkIn 로직 유지 또는 구현)
+        do {
+            let result = try await APIClient.shared.request(
+                path: "/api/v1/attendance/check-in",
+                method: "POST",
+                token: token,
+                responseType: CheckInResponse.self
+            )
+            await MainActor.run {
+                self.points = result.currentPoints
+                if result.success {
+                    print("Check-in success: \(result.message)")
+                }
+            }
+        } catch {
+            print("Check-in failed: \(error)")
+        }
     }
 }
 

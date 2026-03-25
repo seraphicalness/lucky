@@ -18,4 +18,13 @@ enum FortuneAPI {
             responseType: FortuneWidgetResponse.self
         )
     }
+
+    /// 오늘의 타로 카드
+    static func fetchTodayTarot(token: String) async throws -> TarotCardResponse {
+        try await APIClient.shared.request(
+            path: "/api/v1/fortune/today/tarot",
+            token: token,
+            responseType: TarotCardResponse.self
+        )
+    }
 }

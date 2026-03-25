@@ -10,6 +10,7 @@ struct ProfileView: View {
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var showEditProfile = false
+    @State private var isClaimingAdReward = false
 
     @State private var showContactSheet = false
 
@@ -18,6 +19,7 @@ struct ProfileView: View {
             VStack(alignment: .leading, spacing: 16) {
                 profileHeader
                 sajuCard
+                adRewardCard
                 settingsCard
                 logoutCard
 
@@ -80,7 +82,7 @@ struct ProfileView: View {
 
                 if let s = saju, let p = profile {
                     let genderLabel = p.gender == "MALE" ? "남자" : p.gender == "FEMALE" ? "여자" : ""
-                    Text("\(s.dayPillarName)일주 \(genderLabel)")
+                    Text("\(s.dayPillarName) \(genderLabel)")
                         .font(.system(size: 15))
                         .foregroundStyle(.secondary)
                 }
@@ -107,17 +109,14 @@ struct ProfileView: View {
     private var sajuCard: some View {
         VStack(spacing: 14) {
             if let s = saju {
-                let pillars: [PillarInfo?] = [s.yearPillar, s.monthPillar, s.dayPillar, s.timePillar]
-                let validPillars = pillars.compactMap { $0 }
-                let columns = Array(
-                    repeating: GridItem(.flexible(), spacing: 14),
-                    count: validPillars.count
-                )
+                // 시주 → 일주 → 월주 → 년주 순서로 표시
+                let pillars: [PillarInfo?] = [s.timePillar, s.dayPillar, s.monthPillar, s.yearPillar]
+                let columns = Array(repeating: GridItem(.flexible(), spacing: 14), count: 4)
 
-                // 연 · 월 · 일 · 시 라벨
-                let titles = ["연주", "월주", "일주", "시주"]
+                // 라벨
+                let titles = ["시주", "일주", "월주", "년주"]
                 HStack {
-                    ForEach(0..<validPillars.count, id: \.self) { i in
+                    ForEach(0..<4, id: \.self) { i in
                         Text(titles[i])
                             .font(.system(size: 11))
                             .foregroundStyle(Color(UIColor.secondaryLabel))
@@ -127,22 +126,30 @@ struct ProfileView: View {
 
                 // 천간 (stems)
                 LazyVGrid(columns: columns, spacing: 14) {
-                    ForEach(validPillars.indices, id: \.self) { i in
-                        elementCircle(
-                            hanja: stemHanja(from: validPillars[i]),
-                            korean: validPillars[i].stemKorean,
-                            element: validPillars[i].stemElement
-                        )
+                    ForEach(0..<4, id: \.self) { i in
+                        if let pillar = pillars[i] {
+                            elementCircle(
+                                hanja: stemHanja(from: pillar),
+                                korean: pillar.stemKorean,
+                                element: pillar.stemElement
+                            )
+                        } else {
+                            emptyElementCircle()
+                        }
                     }
                 }
                 // 지지 (branches)
                 LazyVGrid(columns: columns, spacing: 14) {
-                    ForEach(validPillars.indices, id: \.self) { i in
-                        elementCircle(
-                            hanja: branchHanja(from: validPillars[i]),
-                            korean: validPillars[i].branchKorean,
-                            element: validPillars[i].branchElement
-                        )
+                    ForEach(0..<4, id: \.self) { i in
+                        if let pillar = pillars[i] {
+                            elementCircle(
+                                hanja: branchHanja(from: pillar),
+                                korean: pillar.branchKorean,
+                                element: pillar.branchElement
+                            )
+                        } else {
+                            emptyElementCircle()
+                        }
                     }
                 }
             } else {
@@ -180,6 +187,13 @@ struct ProfileView: View {
         .aspectRatio(1, contentMode: .fit)
     }
 
+    @ViewBuilder
+    private func emptyElementCircle() -> some View {
+        Circle()
+            .fill(Color(UIColor.systemGray5))
+            .aspectRatio(1, contentMode: .fit)
+    }
+
     // MARK: - 설정 메뉴 카드
 
     private var settingsCard: some View {
@@ -205,6 +219,51 @@ struct ProfileView: View {
     private var logoutCard: some View {
         menuRow(icon: "rectangle.portrait.and.arrow.right", label: "로그아웃") {
             session.logout()
+        }
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    // MARK: - 광고 보상 카드
+
+    private var adRewardCard: some View {
+        VStack(spacing: 0) {
+            Button {
+                Task {
+                    await MainActor.run { isClaimingAdReward = true }
+                    await session.claimAdReward()
+                    await MainActor.run { isClaimingAdReward = false }
+                }
+            } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: "play.rectangle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(session.dailyAdCount >= 5 ? Color(UIColor.tertiaryLabel) : AppTheme.tabGreen)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("광고 보고 포인트 받기")
+                            .font(.system(size: 16))
+                            .foregroundStyle(Color(UIColor.label))
+
+                        Text("100P (오늘 \(session.dailyAdCount)/5)")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color(UIColor.secondaryLabel))
+                    }
+
+                    Spacer()
+
+                    if isClaimingAdReward {
+                        ProgressView().tint(AppTheme.tabGreen)
+                    } else {
+                        Text("시청하기")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(session.dailyAdCount >= 5 ? Color(UIColor.tertiaryLabel) : AppTheme.tabGreen)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 18)
+            }
+            .disabled(session.dailyAdCount >= 5 || isClaimingAdReward)
         }
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -303,6 +362,12 @@ private struct EditProfileView: View {
     let onUpdated: (ProfileResponse) -> Void
 
     @State private var nickname: String
+    @State private var birthDate: Date
+    @State private var isBirthTimeUnknown: Bool
+    @State private var birthTime: Date
+    @State private var gender: String?
+    @State private var birthCalendarType: String
+    @State private var birthIsLeapMonth: Bool
     @State private var isSaving = false
     @State private var errorMessage: String? = nil
 
@@ -311,6 +376,29 @@ private struct EditProfileView: View {
         self.profile = profile
         self.onUpdated = onUpdated
         _nickname = State(initialValue: profile.nickname)
+
+        // 생일
+        if let s = profile.birthDate, let d = Self.localDateFormatter.date(from: s) {
+            _birthDate = State(initialValue: d)
+        } else {
+            _birthDate = State(initialValue: Date())
+        }
+
+        // 성별
+        _gender = State(initialValue: profile.gender)
+
+        // 양/음력 + 윤달
+        _birthCalendarType = State(initialValue: profile.birthCalendarType ?? "SOLAR")
+        _birthIsLeapMonth = State(initialValue: profile.birthIsLeapMonth ?? false)
+
+        // 태어난 시각(선택)
+        if let t = profile.birthTime, let parsed = Self.parseTime(t) {
+            _isBirthTimeUnknown = State(initialValue: false)
+            _birthTime = State(initialValue: parsed)
+        } else {
+            _isBirthTimeUnknown = State(initialValue: true)
+            _birthTime = State(initialValue: Date())
+        }
     }
 
     var body: some View {
@@ -319,6 +407,49 @@ private struct EditProfileView: View {
                 Section(header: Text("프로필")) {
                     TextField("이름", text: $nickname)
                         .autocorrectionDisabled()
+                }
+
+                Section(header: Text("양력/음력")) {
+                    Picker("달력", selection: $birthCalendarType) {
+                        Text("양력").tag("SOLAR")
+                        Text("음력").tag("LUNAR")
+                    }
+                    .pickerStyle(.segmented)
+
+                    if birthCalendarType == "LUNAR" {
+                        Toggle("윤달", isOn: $birthIsLeapMonth)
+                    } else {
+                        // 양력일 때는 윤달 의미가 없으니 항상 false 유지
+                        Toggle("윤달", isOn: Binding(get: { false }, set: { _ in birthIsLeapMonth = false }))
+                            .disabled(true)
+                            .opacity(0.5)
+                    }
+                }
+
+                Section(header: Text("생년월일")) {
+                    DatePicker("생일", selection: $birthDate, displayedComponents: .date)
+                        .datePickerStyle(.compact)
+                }
+
+                Section(header: Text("태어난 시각")) {
+                    Toggle("시간 모름", isOn: $isBirthTimeUnknown)
+                    if !isBirthTimeUnknown {
+                        DatePicker("시간", selection: $birthTime, displayedComponents: .hourAndMinute)
+                            .datePickerStyle(.wheel)
+                            .frame(maxWidth: .infinity, minHeight: 140)
+                    }
+                }
+
+                Section(header: Text("성별")) {
+                    Picker("성별", selection: Binding(
+                        get: { gender ?? "" },
+                        set: { gender = $0.isEmpty ? nil : $0 }
+                    )) {
+                        Text("선택 안 함").tag("")
+                        Text("남자").tag("MALE")
+                        Text("여자").tag("FEMALE")
+                    }
+                    .pickerStyle(.segmented)
                 }
                 if let id = profile.userId as Int? {
                     Section(header: Text("내 유저 ID")) {
@@ -342,7 +473,7 @@ private struct EditProfileView: View {
                             Text("저장")
                         }
                     }
-                    .disabled(nickname.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
+                    .disabled(nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
                 }
             }
             .alert("오류", isPresented: Binding(
@@ -357,19 +488,25 @@ private struct EditProfileView: View {
     }
 
     private func save() async {
-        guard let birthDate = profile.birthDate else {
-            errorMessage = "생년월일 정보가 없어 수정할 수 없어요."
+        let trimmedName = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedName.isEmpty {
+            errorMessage = "이름을 입력해 주세요."
             return
         }
         isSaving = true
         do {
+            let birthDateString = Self.localDateFormatter.string(from: birthDate)
+            let birthTimeString: String? = isBirthTimeUnknown ? nil : Self.timeString(from: birthTime)
+            let calendarTypeToSend = (birthCalendarType == "LUNAR") ? "LUNAR" : "SOLAR"
+            let leapToSend = (calendarTypeToSend == "LUNAR") ? birthIsLeapMonth : false
+
             let req = ProfileUpdateRequest(
-                nickname: nickname,
-                birthDate: birthDate,
-                birthTime: profile.birthTime,
-                gender: profile.gender,
-                birthCalendarType: profile.birthCalendarType,
-                birthIsLeapMonth: profile.birthIsLeapMonth
+                nickname: trimmedName,
+                birthDate: birthDateString,
+                birthTime: birthTimeString,
+                gender: gender,
+                birthCalendarType: calendarTypeToSend,
+                birthIsLeapMonth: leapToSend
             )
             let updated = try await ProfileAPI.updateProfile(token: token, request: req)
             await MainActor.run {
@@ -382,5 +519,40 @@ private struct EditProfileView: View {
                 isSaving = false
             }
         }
+    }
+}
+
+// MARK: - EditProfileView Helpers
+
+private extension EditProfileView {
+    static let localDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(secondsFromGMT: 0)
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    static func parseTime(_ s: String) -> Date? {
+        // "HH:mm:ss" 또는 "HH:mm"
+        let parts = s.split(separator: ":").map(String.init)
+        guard parts.count >= 2, let h = Int(parts[0]), let m = Int(parts[1]) else { return nil }
+        var comps = DateComponents()
+        comps.calendar = Calendar(identifier: .gregorian)
+        comps.timeZone = TimeZone(secondsFromGMT: 0)
+        comps.year = 2000
+        comps.month = 1
+        comps.day = 1
+        comps.hour = h
+        comps.minute = m
+        comps.second = 0
+        return comps.date
+    }
+
+    static func timeString(from date: Date) -> String {
+        let cal = Calendar(identifier: .gregorian)
+        let h = cal.component(.hour, from: date)
+        let m = cal.component(.minute, from: date)
+        return String(format: "%02d:%02d:00", h, m)
     }
 }

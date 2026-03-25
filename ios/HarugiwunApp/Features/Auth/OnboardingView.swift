@@ -23,6 +23,8 @@ struct OnboardingView: View {
     @State private var birthMinute: Int? = nil
     @State private var showBirthHourPicker = false
     @State private var unknownBirthTime = false
+    @State private var birthCalendarType: String = "SOLAR" // SOLAR / LUNAR
+    @State private var birthIsLeapMonth: Bool = false
 
     // Step 3
     @State private var gender: OnboardingGender? = nil
@@ -150,6 +152,38 @@ struct OnboardingView: View {
             Spacer()
 
             VStack(spacing: 32) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("양력/음력")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.primary)
+
+                    Picker("달력", selection: $birthCalendarType) {
+                        Text("양력").tag("SOLAR")
+                        Text("음력").tag("LUNAR")
+                    }
+                    .pickerStyle(.segmented)
+
+                    if birthCalendarType == "LUNAR" {
+                        Button {
+                            birthIsLeapMonth.toggle()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: birthIsLeapMonth ? "checkmark.square.fill" : "checkmark.square")
+                                    .foregroundStyle(birthIsLeapMonth ? AppTheme.tabGreen : Color(UIColor.systemGray3))
+                                    .font(.system(size: 16))
+                                Text("윤달")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(Color(UIColor.secondaryLabel))
+                            }
+                        }
+                    } else {
+                        // 양력 선택 시 윤달은 항상 false
+                        if birthIsLeapMonth {
+                            Color.clear.onAppear { birthIsLeapMonth = false }
+                        }
+                    }
+                }
+
                 underlineField(label: "출생년도") {
                     Button { showBirthDatePicker = true } label: {
                         Text(birthDate.map(formattedDate) ?? "출생년도를 선택해 주세요.")
@@ -334,6 +368,7 @@ struct OnboardingView: View {
 
         Task {
             do {
+                let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
                 let birthTimeString: String? = {
                     guard !unknownBirthTime, let h = birthHour, let m = birthMinute else { return nil }
                     return apiTimeString(hour: h, minute: m)
@@ -341,11 +376,11 @@ struct OnboardingView: View {
 
                 let req = SocialLoginRequest(
                     providerUserId: session.mockProviderUserId,
-                    nickname: name.isEmpty ? nil : name,
+                    nickname: trimmedName.isEmpty ? nil : trimmedName,
                     birthDate: birthDate.map { apiDateString($0) },
                     birthTime: birthTimeString,
-                    birthCalendarType: "SOLAR",
-                    birthIsLeapMonth: false,
+                    birthCalendarType: (birthCalendarType == "LUNAR") ? "LUNAR" : "SOLAR",
+                    birthIsLeapMonth: (birthCalendarType == "LUNAR") ? birthIsLeapMonth : false,
                     gender: gender == .female ? "FEMALE" : gender == .male ? "MALE" : nil
                 )
                 let res = try await APIClient.shared.request(

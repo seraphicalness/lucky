@@ -44,7 +44,7 @@ final class APIClient {
         guard let http = response as? HTTPURLResponse else { throw APIError.networkError(URLError(.badServerResponse)) }
         try checkStatus(http, data: data)
         do {
-            return try JSONDecoder().decode(T.self, from: data)
+            return try makeDecoder().decode(T.self, from: data)
         } catch {
             throw APIError.decodingError(error)
         }
@@ -100,5 +100,26 @@ final class APIClient {
             print("❌ API [\(response.statusCode)] \(response.url?.path ?? ""): \(msg)")
             throw APIError.httpError(response.statusCode, msg)
         }
+    }
+
+    private func makeDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+
+        // 서버에서 LocalDate("yyyy-MM-dd") 또는 ISO8601이 올 수 있음
+        let iso = ISO8601DateFormatter()
+        let localDate = DateFormatter()
+        localDate.locale = Locale(identifier: "en_US_POSIX")
+        localDate.timeZone = TimeZone(secondsFromGMT: 0)
+        localDate.dateFormat = "yyyy-MM-dd"
+
+        decoder.dateDecodingStrategy = .custom { d in
+            let container = try d.singleValueContainer()
+            let str = try container.decode(String.self)
+            if let date = localDate.date(from: str) { return date }
+            if let date = iso.date(from: str) { return date }
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(str)")
+        }
+
+        return decoder
     }
 }
