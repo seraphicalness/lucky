@@ -50,6 +50,11 @@ public class AuthService {
             .map(AppUserAuth::getUser)
             .orElseGet(() -> createUserWithAuth(request));
 
+        // 닉네임은 최초 생성 뿐 아니라, 클라이언트에서 값이 오면 갱신(공백은 무시)
+        if (request.nickname() != null && !request.nickname().isBlank()) {
+            user.setNickname(request.nickname().trim());
+        }
+
         if (request.birthDate() != null) {
             AppUserProfile profile = appUserProfileRepository.findByUserId(user.getId()).orElseGet(() -> {
                 AppUserProfile p = new AppUserProfile();
@@ -86,7 +91,7 @@ public class AuthService {
     private AppUser createUserWithAuth(AuthDtos.SocialLoginRequest request) {
         AppUser user = new AppUser();
         // Fix: Correct Hangul encoding for default nickname
-        user.setNickname(request.nickname() == null || request.nickname().isBlank() ? "하루기운유저" : request.nickname());
+        user.setNickname(request.nickname() == null || request.nickname().isBlank() ? "하루기운유저" : request.nickname().trim());
         AppUser savedUser = appUserRepository.save(user);
 
         AppUserAuth auth = new AppUserAuth();

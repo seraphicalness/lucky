@@ -64,9 +64,9 @@ public class FortuneScoringWeights {
         categoryWeights.put(
             FortuneCategory.LOVE,
             new CategoryWeights(
-                0,  // wealth는 성별에 따라 spouseStar가 되므로 여기서는 0
+                5,  // wealth는 성별에 따라 spouseStar가 되므로 여기서는 0
                 2,  // resource
-                0,  // officer는 spouseStar 쪽에서 처리
+                5,  // officer는 spouseStar 쪽에서 처리
                 -2, // output 패널티
                 0
             )

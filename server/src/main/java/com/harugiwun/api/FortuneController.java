@@ -1,7 +1,10 @@
 package com.harugiwun.api;
 
 import com.harugiwun.dto.FortuneDtos;
+import com.harugiwun.dto.TarotDtos; // New import
 import com.harugiwun.service.FortuneService;
+import com.harugiwun.service.fortune.TarotCardService; // New import
+import org.springframework.http.ResponseEntity; // New import for ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -13,9 +16,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class FortuneController {
 
     private final FortuneService fortuneService;
+    private final TarotCardService tarotCardService; // New field
 
-    public FortuneController(FortuneService fortuneService) {
+    public FortuneController(FortuneService fortuneService, TarotCardService tarotCardService) { // Modified constructor
         this.fortuneService = fortuneService;
+        this.tarotCardService = tarotCardService;
     }
 
     @GetMapping("/widget")
@@ -34,5 +39,11 @@ public class FortuneController {
         @PathVariable Long friendUserId
     ) {
         return fortuneService.getFriendTodayFortune(userId, friendUserId);
+    }
+
+    @GetMapping("/tarot") // New endpoint
+    public ResponseEntity<TarotDtos.DailyTarotCardResponse> getDailyTarotCard(@AuthenticationPrincipal Long userId) {
+        // userId는 현재 타로 카드 API에 사용되지 않지만, 인증된 사용자 요청임을 나타냄
+        return ResponseEntity.ok(tarotCardService.getDailyTarotCard());
     }
 }

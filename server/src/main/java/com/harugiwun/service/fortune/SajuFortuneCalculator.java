@@ -123,9 +123,10 @@ public class SajuFortuneCalculator {
         // Love Score
         Element spouseStar = spouseStar(gender, wealth, officer);
         FortuneScoringWeights.CategoryWeights loveWeights = weights.getCategoryWeights(FortuneCategory.LOVE);
+        int spouseStarWeight = (spouseStar == wealth) ? loveWeights.wealthWeight() : loveWeights.officerWeight(); // Determine the correct weight based on spouseStar
         int loveBase =
             baseScore
-                + daily.count(spouseStar) * Math.max(loveWeights.wealthWeight(), loveWeights.officerWeight())
+                + daily.count(spouseStar) * spouseStarWeight // Use the determined weight
                 + daily.count(resource) * loveWeights.resourceWeight()
                 + daily.count(output) * loveWeights.outputWeight();
         var loveAdj = applyBranchRelationAdjustments(loveBase, FortuneCategory.LOVE, elementOfBranch(branchOf(today.getDay())), natal, today);
