@@ -52,4 +52,13 @@ public class FriendController {
     ) {
         return friendService.getPendingRequests(userId);
     }
+
+    /// 친구에게 콕 찌르기 (알림은 추후 연동)
+    @PostMapping("/nudge")
+    public FriendDtos.NudgeResponse nudgeFriend(
+        @AuthenticationPrincipal Long userId,
+        @RequestBody FriendDtos.NudgeRequest body
+    ) {
+        return friendService.nudgeFriend(userId, body.toUserId());
+    }
 }

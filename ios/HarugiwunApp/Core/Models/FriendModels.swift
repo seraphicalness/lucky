@@ -7,6 +7,7 @@ struct FriendResponse: Codable, Identifiable {
     let friendUserId: Int
     let nickname: String
     let friendSince: String
+    let lastActiveAt: String?
 }
 
 struct FriendListResponse: Codable {
@@ -37,4 +38,15 @@ struct FriendRequestSendRequest: Codable {
 struct FriendRequestActionRequest: Codable {
     let requestId: Int
     let action: String // "ACCEPTED" or "REJECTED"
+}
+
+// MARK: - Nudge
+
+struct FriendNudgeRequest: Codable {
+    let toUserId: Int
+}
+
+struct NudgeResponse: Codable {
+    let success: Bool
+    let message: String
 }

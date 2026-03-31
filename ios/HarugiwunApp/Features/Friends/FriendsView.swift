@@ -3,36 +3,89 @@ import SwiftUI
 struct FriendsView: View {
     @EnvironmentObject private var session: SessionStore
 
-    @State private var selectedTab: FriendsTab = .list
+    /// 임시 목업 — 서버 친구가 없을 때만 사용. 배포 전 `false`로 끄기.
+    private static let useTemporaryMockFriends = true
+
+    private static let temporaryMockFriends: [FriendResponse] = [
+        FriendResponse(friendUserId: 9001, nickname: "친구1", friendSince: "2026-01-15T10:00:00", lastActiveAt: nil),
+        FriendResponse(friendUserId: 9002, nickname: "친구2", friendSince: "2026-02-01T10:00:00", lastActiveAt: nil),
+        FriendResponse(friendUserId: 9003, nickname: "친구3", friendSince: "2026-02-20T10:00:00", lastActiveAt: nil),
+        FriendResponse(friendUserId: 9004, nickname: "친구4", friendSince: "2026-03-01T10:00:00", lastActiveAt: nil)
+    ]
+
     @State private var friends: [FriendResponse] = []
     @State private var pendingRequests: [FriendRequestResponse] = []
+    /// 0 = 나, 1... = friends[index - 1]
+    @State private var selectedCircleIndex: Int = 0
+    @State private var didSetInitialFriendSelection = false
+
     @State private var showSendRequest = false
+    @State private var showRequestsSheet = false
     @State private var sendTargetId: String = ""
     @State private var alertMessage: String? = nil
     @State private var isLoadingAction = false
+    @State private var isNudging = false
 
-    enum FriendsTab { case list, requests }
+    /// 공감 이모지(고정 8종) — 받은 횟수 많은 순으로 모달에 정렬
+    private static let reactionPalette: [String] = ["😝", "😥", "👍", "👌", "😭", "💩", "💖", "💢"]
+
+    @State private var reactionCounts: [String: Int] = [
+        "😝": 0, "😥": 0, "👍": 0, "👌": 0,
+        "😭": 0, "💩": 0, "💖": 0, "💢": 0
+    ]
+    @State private var showReactionPicker = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            tabPicker
-            TabView(selection: $selectedTab) {
-                friendListTab.tag(FriendsTab.list)
-                requestsTab.tag(FriendsTab.requests)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                horizontalFriendStrip
+                    .padding(.top, 4)
+
+                if friends.isEmpty {
+                    emptyFriendsPlaceholder
+                        .padding(.top, 28)
+                } else if selectedCircleIndex == 0 {
+                    meSelectedSection
+                        .padding(.top, 20)
+                } else if let friend = selectedFriend {
+                    friendDetailSection(friend)
+                        .padding(.top, 20)
+                }
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
+            .padding(.horizontal, 20)
+            .padding(.bottom, 32)
         }
         .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle("친구")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    showRequestsSheet = true
+                } label: {
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "bell")
+                            .font(.system(size: 18))
+                            .foregroundStyle(Color(UIColor.label))
+                        if !pendingRequests.isEmpty {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 7, height: 7)
+                                .offset(x: 3, y: -2)
+                        }
+                    }
+                }
+                .accessibilityLabel("받은 친구 신청")
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     showSendRequest = true
                 } label: {
                     Image(systemName: "person.badge.plus")
-                        .foregroundStyle(AppTheme.tabGreen)
+                        .font(.system(size: 18))
+                        .foregroundStyle(Color(UIColor.label))
                 }
+                .accessibilityLabel("친구 추가")
             }
         }
         .sheet(isPresented: $showSendRequest) {
@@ -45,6 +98,12 @@ struct FriendsView: View {
                 }
             )
         }
+        .sheet(isPresented: $showRequestsSheet) {
+            pendingRequestsSheet
+        }
+        .sheet(isPresented: $showReactionPicker) {
+            reactionPickerSheet
+        }
         .alert("알림", isPresented: Binding(
             get: { alertMessage != nil },
             set: { if !$0 { alertMessage = nil } }
@@ -56,147 +115,295 @@ struct FriendsView: View {
         .task { await loadData() }
     }
 
-    // MARK: - 탭 피커
+    // MARK: - 가로 친구 스트립 (나 + 친구들)
 
-    private var tabPicker: some View {
-        HStack(spacing: 0) {
-            tabButton("친구 목록", tab: .list, badge: nil)
-            tabButton("신청 관리", tab: .requests, badge: pendingRequests.isEmpty ? nil : pendingRequests.count)
+    private var horizontalFriendStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 20) {
+                circleAvatar(label: "나", index: 0)
+                ForEach(Array(friends.enumerated()), id: \.element.id) { i, friend in
+                    circleAvatar(label: friend.nickname, index: i + 1)
+                }
+            }
+            .padding(.vertical, 10)
+            .padding(.trailing, 8)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(Color(UIColor.systemGroupedBackground))
     }
 
-    private func tabButton(_ title: String, tab: FriendsTab, badge: Int?) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) { selectedTab = tab }
+    private func circleAvatar(label: String, index: Int) -> some View {
+        let isSelected = selectedCircleIndex == index
+        return Button {
+            selectedCircleIndex = index
         } label: {
-            HStack(spacing: 4) {
-                Text(title)
-                    .font(.system(size: 15, weight: selectedTab == tab ? .semibold : .regular))
-                    .foregroundStyle(selectedTab == tab ? AppTheme.tabGreen : Color(UIColor.secondaryLabel))
-                if let badge = badge {
-                    ZStack {
-                        Circle().fill(Color.red).frame(width: 18, height: 18)
-                        Text("\(badge)").font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
-                    }
+            VStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 58, height: 58)
+                        .overlay(
+                            Circle()
+                                .stroke(isSelected ? AppTheme.tabGreen : Color(UIColor.systemGray4), lineWidth: isSelected ? 2.5 : 1)
+                        )
+                        .shadow(color: .black.opacity(0.04), radius: 3, x: 0, y: 1)
+
+                    Text(String(label.prefix(1)))
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(Color(UIColor.secondaryLabel))
                 }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .overlay(alignment: .bottom) {
-                if selectedTab == tab {
-                    Rectangle()
-                        .fill(AppTheme.tabGreen)
-                        .frame(height: 2)
-                        .clipShape(Capsule())
-                }
+
+                Text(label)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(UIColor.secondaryLabel))
+                    .lineLimit(1)
+                    .frame(width: 68)
             }
         }
+        .buttonStyle(.plain)
     }
 
-    // MARK: - 친구 목록 탭
+    private var selectedFriend: FriendResponse? {
+        guard selectedCircleIndex > 0 else { return nil }
+        let i = selectedCircleIndex - 1
+        guard i < friends.count else { return nil }
+        return friends[i]
+    }
 
-    private var friendListTab: some View {
-        Group {
-            if friends.isEmpty {
-                emptyView(
-                    icon: "person.2",
-                    title: "아직 친구가 없어요",
-                    subtitle: "우측 상단 버튼으로 친구를 추가해보세요"
-                )
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(friends) { friend in
-                            friendRow(friend)
-                        }
-                    }
-                    .background(Color.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-                }
-            }
+    // MARK: - 나 선택
+
+    private var meSelectedSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("오늘의 운세는 홈 탭에서 확인할 수 있어요.")
+                .font(.system(size: 15))
+                .foregroundStyle(Color(UIColor.secondaryLabel))
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
     }
 
-    private func friendRow(_ friend: FriendResponse) -> some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(AppTheme.tabGreen.opacity(0.15))
-                    .frame(width: 44, height: 44)
-                Text(String(friend.nickname.prefix(1)))
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(AppTheme.tabGreen)
-            }
+    // MARK: - 친구 선택 (목업 카드 + 공감)
 
-            VStack(alignment: .leading, spacing: 3) {
+    private func friendDetailSection(_ friend: FriendResponse) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .center, spacing: 14) {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.white)
+                    .frame(width: 56, height: 56)
+                    .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+                    .overlay {
+                        Text(String(friend.nickname.prefix(1)))
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundStyle(AppTheme.tabGreen)
+                    }
+
                 Text(friend.nickname)
-                    .font(.system(size: 16, weight: .medium))
-                Text("친구 됨 · \(formattedDate(friend.friendSince))")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color(UIColor.tertiaryLabel))
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(Color(UIColor.label))
+
+                Spacer(minLength: 8)
+
+                Button {
+                    Task { await nudgeFriend(friend) }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "hand.point.up.left.fill")
+                            .font(.system(size: 14))
+                        Text("콕 찌르기")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundStyle(Color(UIColor.label))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color.white)
+                    .clipShape(Capsule())
+                    .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
+                }
+                .disabled(isNudging)
             }
 
+            VStack(spacing: 12) {
+                Text("아직 운세를 확인하지 않았어요")
+                    .font(.system(size: 15))
+                    .foregroundStyle(Color(UIColor.label))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 22)
+                    .padding(.horizontal, 16)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+
+                Button {
+                    Task {
+                        await session.claimAdReward()
+                        alertMessage = "광고 보상을 적용했어요. 운세 비교는 곧 연동될 예정이에요."
+                    }
+                } label: {
+                    Text("광고보고 친구와 운세 비교하기")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Color(UIColor.label))
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 22)
+                        .padding(.horizontal, 16)
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 18))
+                        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+                }
+                .buttonStyle(.plain)
+            }
+
+            reactionBar
+        }
+    }
+
+    private var reactionBar: some View {
+        HStack {
             Spacer()
-            Image(systemName: "chevron.right")
+            Button {
+                showReactionPicker = true
+            } label: {
+                HStack(spacing: 8) {
+                    Text("공감하기")
+                        .font(.system(size: 14, weight: .semibold))
+                    Image(systemName: "face.smiling")
+                        .font(.system(size: 15))
+                }
+                .foregroundStyle(Color(UIColor.label))
+                .padding(.horizontal, 18)
+                .padding(.vertical, 11)
+                .background(Color.white)
+                .clipShape(Capsule())
+                .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.top, 4)
+    }
+
+    private var sortedReactionItems: [(emoji: String, count: Int)] {
+        Self.reactionPalette.map { emoji in
+            (emoji: emoji, count: reactionCounts[emoji, default: 0])
+        }
+        .sorted { a, b in
+            if a.count != b.count { return a.count > b.count }
+            let ia = Self.reactionPalette.firstIndex(of: a.emoji) ?? 0
+            let ib = Self.reactionPalette.firstIndex(of: b.emoji) ?? 0
+            return ia < ib
+        }
+    }
+
+    private var reactionPickerSheet: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 4),
+                    spacing: 14
+                ) {
+                    ForEach(sortedReactionItems, id: \.emoji) { item in
+                        Button {
+                            reactionCounts[item.emoji, default: 0] += 1
+                            showReactionPicker = false
+                        } label: {
+                            VStack(spacing: 8) {
+                                Text(item.emoji)
+                                    .font(.system(size: 38))
+                                Text("\(item.count)")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(Color(UIColor.secondaryLabel))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color(UIColor.systemGray6).opacity(0.55))
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                Spacer(minLength: 8)
+            }
+            .background(Color(UIColor.systemBackground))
+            .navigationTitle("공감하기")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("닫기") { showReactionPicker = false }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+    }
+
+    // MARK: - 빈 상태
+
+    private var emptyFriendsPlaceholder: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "person.2")
+                .font(.system(size: 40, weight: .light))
+                .foregroundStyle(Color(UIColor.systemGray3))
+            Text("관심 친구를 추가해주세요.")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(Color(UIColor.secondaryLabel))
+            Text("우측 상단에서 친구 신청을 보낼 수 있어요.")
                 .font(.system(size: 13))
                 .foregroundStyle(Color(UIColor.tertiaryLabel))
+                .multilineTextAlignment(.center)
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 32)
         .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .overlay(alignment: .bottom) {
-            if friend.id != friends.last?.id {
-                Divider().padding(.leading, 78)
-            }
-        }
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
     }
 
-    // MARK: - 신청 관리 탭
+    // MARK: - 받은 신청 시트
 
-    private var requestsTab: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                if !pendingRequests.isEmpty {
-                    pendingRequestsSection
+    private var pendingRequestsSheet: some View {
+        NavigationStack {
+            Group {
+                if pendingRequests.isEmpty {
+                    VStack(spacing: 12) {
+                        Spacer()
+                        Image(systemName: "bell.slash")
+                            .font(.system(size: 36))
+                            .foregroundStyle(Color(UIColor.systemGray3))
+                        Text("받은 신청이 없어요")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(Color(UIColor.secondaryLabel))
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    emptyView(
-                        icon: "bell",
-                        title: "받은 신청이 없어요",
-                        subtitle: "친구 신청이 오면 여기에 표시됩니다"
-                    )
-                    .frame(height: 200)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-        }
-    }
-
-    private var pendingRequestsSection: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("받은 친구 신청")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color(UIColor.secondaryLabel))
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 10)
-
-            VStack(spacing: 0) {
-                ForEach(pendingRequests) { req in
-                    requestRow(req)
-                    if req.id != pendingRequests.last?.id {
-                        Divider().padding(.leading, 78)
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            ForEach(pendingRequests) { req in
+                                requestRow(req)
+                                if req.id != pendingRequests.last?.id {
+                                    Divider().padding(.leading, 78)
+                                }
+                            }
+                        }
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
                     }
                 }
             }
-            .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .background(Color(UIColor.systemGroupedBackground))
+            .navigationTitle("받은 친구 신청")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("닫기") { showRequestsSheet = false }
+                }
+            }
         }
     }
 
@@ -251,33 +458,52 @@ struct FriendsView: View {
         .padding(.vertical, 14)
     }
 
-    // MARK: - 빈 화면
-
-    private func emptyView(icon: String, title: String, subtitle: String) -> some View {
-        VStack(spacing: 12) {
-            Spacer()
-            Image(systemName: icon)
-                .font(.system(size: 40, weight: .light))
-                .foregroundStyle(Color(UIColor.systemGray4))
-            Text(title)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(Color(UIColor.secondaryLabel))
-            Text(subtitle)
-                .font(.system(size: 13))
-                .foregroundStyle(Color(UIColor.tertiaryLabel))
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
-    }
-
     // MARK: - API
 
     private func loadData() async {
         guard let token = session.token else { return }
         async let friendsResult = FriendAPI.fetchFriends(token: token)
         async let requestsResult = FriendAPI.fetchPendingRequests(token: token)
-        friends = (try? await friendsResult) ?? []
-        pendingRequests = (try? await requestsResult) ?? []
+        let loadedFriends = (try? await friendsResult) ?? []
+        let loadedReq = (try? await requestsResult) ?? []
+        let mergedFriends: [FriendResponse] = {
+            if Self.useTemporaryMockFriends && loadedFriends.isEmpty {
+                return Self.temporaryMockFriends
+            }
+            return loadedFriends
+        }()
+        await MainActor.run {
+            friends = mergedFriends
+            pendingRequests = loadedReq
+            if !didSetInitialFriendSelection, !friends.isEmpty {
+                selectedCircleIndex = 1
+                didSetInitialFriendSelection = true
+            }
+            if selectedCircleIndex > friends.count {
+                selectedCircleIndex = friends.isEmpty ? 0 : 1
+            }
+        }
+    }
+
+    private func nudgeFriend(_ friend: FriendResponse) async {
+        if Self.useTemporaryMockFriends,
+           Self.temporaryMockFriends.contains(where: { $0.friendUserId == friend.friendUserId }) {
+            await MainActor.run {
+                alertMessage = "임시 친구입니다. 실제 콕 찌르기는 서버에 친구가 등록된 뒤에 할 수 있어요."
+            }
+            return
+        }
+        guard let token = session.token else { return }
+        isNudging = true
+        defer { isNudging = false }
+        do {
+            let res = try await FriendAPI.nudge(token: token, toUserId: friend.friendUserId)
+            await MainActor.run { alertMessage = res.message }
+        } catch {
+            await MainActor.run {
+                alertMessage = (error as? APIError)?.errorDescription ?? "콕 찌르기에 실패했어요."
+            }
+        }
     }
 
     private func sendFriendRequest(toUserId: Int) {

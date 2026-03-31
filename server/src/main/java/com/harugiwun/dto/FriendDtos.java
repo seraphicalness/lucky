@@ -31,5 +31,7 @@ public class FriendDtos {
 
     public record PendingRequestListResponse(List<FriendRequestResponse> requests) {}
 
+    public record NudgeRequest(Long toUserId) {}
+
     public record NudgeResponse(boolean success, String message) {}
 }
