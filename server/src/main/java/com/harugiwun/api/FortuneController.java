@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity; // New import for ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -41,9 +42,13 @@ public class FortuneController {
         return fortuneService.getFriendTodayFortune(userId, friendUserId);
     }
 
-    @GetMapping("/tarot") // New endpoint
+    @GetMapping("/tarot")
     public ResponseEntity<TarotDtos.DailyTarotCardResponse> getDailyTarotCard(@AuthenticationPrincipal Long userId) {
-        // userId는 현재 타로 카드 API에 사용되지 않지만, 인증된 사용자 요청임을 나타냄
-        return ResponseEntity.ok(tarotCardService.getDailyTarotCard());
+        return ResponseEntity.ok(tarotCardService.getDailyTarotCard(userId));
+    }
+
+    @PostMapping("/tarot/pick")
+    public ResponseEntity<TarotDtos.DailyTarotCardResponse> pickDailyTarotCard(@AuthenticationPrincipal Long userId) {
+        return ResponseEntity.ok(tarotCardService.pickDailyTarotCard(userId));
     }
 }
