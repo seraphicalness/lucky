@@ -30,11 +30,13 @@ struct TarotCardResponse: Codable {
     let meaning: String
     let description: String
     let imageUrl: String
+    let picked: Bool
 
     enum CodingKeys: String, CodingKey {
         case name
         case meaning
         case description
         case imageUrl
+        case picked
     }
 }

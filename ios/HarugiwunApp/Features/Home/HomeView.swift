@@ -7,6 +7,7 @@ struct HomeView: View {
 
     @State private var fortune: FortuneDetailResponse? = nil
     @State private var tarotCard: TarotCardResponse? = nil
+    @State private var showTarotPick = false
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var showWidgetGuide = false
@@ -68,6 +69,14 @@ struct HomeView: View {
         }
         .sheet(isPresented: $showWidgetGuide) {
             WidgetGuideSheet()
+        }
+        .fullScreenCover(isPresented: $showTarotPick) {
+            if let token = session.token {
+                TarotPickView(token: token) { picked in
+                    self.tarotCard = picked
+                    self.showTarotPick = false
+                }
+            }
         }
         .alert("오류", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("확인") {}
@@ -208,25 +217,45 @@ struct HomeView: View {
             }
 
             if let tarotCard {
-                HStack(alignment: .top, spacing: 14) {
-                    tarotImage(imageUrl: tarotCard.imageUrl)
-                        .frame(width: 92, height: 120)
+                if tarotCard.picked {
+                    HStack(alignment: .top, spacing: 14) {
+                        tarotImage(imageUrl: tarotCard.imageUrl)
+                            .frame(width: 92, height: 120)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(tarotCard.name)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Color(UIColor.label))
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(tarotCard.name)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(Color(UIColor.label))
 
-                        Text(tarotCard.meaning)
-                            .font(.system(size: 12))
-                            .foregroundStyle(Color(UIColor.secondaryLabel))
+                            Text(tarotCard.meaning)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(AppTheme.tabGreen)
 
-                        Text(tarotCard.description)
-                            .font(.system(size: 12))
-                            .foregroundStyle(Color(UIColor.label))
-                            .lineSpacing(4)
-                            .fixedSize(horizontal: false, vertical: true)
+                            Text(tarotCard.description)
+                                .font(.system(size: 12))
+                                .foregroundStyle(Color(UIColor.label))
+                                .lineSpacing(4)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
+                } else {
+                    // 뽑기 전 상태
+                    Button {
+                        showTarotPick = true
+                    } label: {
+                        VStack(spacing: 6) {
+                            Text("오늘의 행운 카드")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(Color(UIColor.label))
+                            Text("오늘의 행운 카드")
+                                .font(.system(size: 14))
+                                .foregroundStyle(Color(UIColor.secondaryLabel))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 18)
+                    }
+                    .buttonStyle(.plain)
                 }
             } else {
                 VStack(alignment: .leading, spacing: 8) {
@@ -405,6 +434,259 @@ private struct StoreView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
+    }
+}
+
+// MARK: - Tarot Pick View (Full Screen)
+
+private struct TarotPickView: View {
+    let token: String
+    let onPicked: (TarotCardResponse) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @Namespace private var ns
+
+    @State private var selectedIndex: Int? = nil
+    @State private var flipRotation: Double = 0
+    @State private var result: TarotCardResponse? = nil
+    @State private var isPicking = false
+    @State private var errorMessage: String? = nil
+
+    private let cardCount = 9
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(red: 0.06, green: 0.06, blue: 0.10),
+                    Color(red: 0.08, green: 0.10, blue: 0.16),
+                    Color(red: 0.04, green: 0.04, blue: 0.07),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                topBar
+
+                Text("오늘의 타로를 뽑아보세요")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.top, 10)
+
+                Text("카드를 하나 선택하면 오늘 하루 동안 고정돼요")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.white.opacity(0.7))
+                    .padding(.top, 6)
+                    .padding(.bottom, 18)
+
+                GeometryReader { geo in
+                    ZStack {
+                        LazyVGrid(
+                            columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: 3),
+                            spacing: 14
+                        ) {
+                            ForEach(0..<cardCount, id: \.self) { idx in
+                                if selectedIndex == idx {
+                                    Color.clear
+                                        .frame(height: 150)
+                                } else {
+                                    backCard
+                                        .matchedGeometryEffect(id: idx, in: ns)
+                                        .frame(height: 150)
+                                        .onTapGesture { pick(index: idx) }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 22)
+                        .padding(.top, 10)
+
+                        if let selectedIndex {
+                            flipCardView
+                                .matchedGeometryEffect(id: selectedIndex, in: ns)
+                                .frame(width: min(geo.size.width * 0.62, 260), height: 360)
+                                .shadow(color: .black.opacity(0.55), radius: 24, x: 0, y: 14)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                if let result, flipRotation >= 180 {
+                    Button {
+                        onPicked(result)
+                        dismiss()
+                    } label: {
+                        Text("운세 확인하기")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 54)
+                            .background(AppTheme.tabGreen)
+                            .clipShape(Capsule())
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 26)
+                    }
+                } else {
+                    Text(isPicking ? "카드를 해석하는 중..." : " ")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.white.opacity(0.65))
+                        .frame(height: 54)
+                        .padding(.bottom, 26)
+                }
+            }
+        }
+        .alert("오류", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("확인") { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
+        }
+    }
+
+    private var topBar: some View {
+        HStack {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.9))
+                    .padding(12)
+                    .background(Color.white.opacity(0.10))
+                    .clipShape(Circle())
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+    }
+
+    private var backCard: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.12, green: 0.12, blue: 0.18),
+                            Color(red: 0.08, green: 0.09, blue: 0.14),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                )
+
+            VStack(spacing: 10) {
+                Image(systemName: "moon.stars.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(AppTheme.tabGreen.opacity(0.9))
+                Capsule()
+                    .fill(Color.white.opacity(0.12))
+                    .frame(width: 42, height: 6)
+            }
+        }
+    }
+
+    private var flipCardView: some View {
+        let showingFront = flipRotation >= 90
+
+        return ZStack {
+            if showingFront {
+                frontCard(result: result)
+            } else {
+                backCard
+            }
+        }
+        .rotation3DEffect(.degrees(flipRotation), axis: (x: 0, y: 1, z: 0))
+        .animation(.easeInOut(duration: 0.9), value: flipRotation)
+    }
+
+    private func frontCard(result: TarotCardResponse?) -> some View {
+        ZStack(alignment: .bottom) {
+            RoundedRectangle(cornerRadius: 18)
+                .fill(Color.white.opacity(0.10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+
+            VStack(spacing: 10) {
+                if let result {
+                    AsyncImage(url: URL(string: result.imageUrl, relativeTo: APIClient.shared.baseURL)?.absoluteURL) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image.resizable().scaledToFill()
+                        default:
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color.white.opacity(0.10))
+                                .overlay(
+                                    Image(systemName: "sparkles")
+                                        .font(.system(size: 26))
+                                        .foregroundStyle(Color.white.opacity(0.7))
+                                )
+                        }
+                    }
+                    .frame(height: 210)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+
+                    Text(result.name)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+
+                    Text(result.meaning)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppTheme.tabGreen)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 10)
+                } else {
+                    ProgressView().tint(.white)
+                    Text("카드를 불러오는 중...")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.8))
+                }
+            }
+            .padding(16)
+        }
+    }
+
+    private func pick(index: Int) {
+        guard selectedIndex == nil, !isPicking else { return }
+        selectedIndex = index
+        isPicking = true
+        flipRotation = 0
+        result = nil
+
+        Task {
+            do {
+                async let api: TarotCardResponse = FortuneAPI.pickTodayTarot(token: token)
+                await MainActor.run {
+                    withAnimation(.easeInOut(duration: 0.9)) {
+                        flipRotation = 180
+                    }
+                }
+                let picked = try await api
+                await MainActor.run {
+                    self.result = picked
+                    self.isPicking = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+                    self.isPicking = false
+                    self.selectedIndex = nil
+                    self.flipRotation = 0
+                }
+            }
+        }
     }
 }
 
